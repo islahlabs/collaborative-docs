@@ -1,19 +1,41 @@
 # Collaborative Docs Backend
 
-A production-ready Rust backend for collaborative document editing with PostgreSQL.
+A production-ready Rust backend for collaborative document editing with PostgreSQL, built with Axum and following Rust best practices.
 
 ## Features
 
 - ✅ **PostgreSQL Database** - Production-ready with proper indexing and transactions
+- ✅ **Modular Architecture** - Clean separation of concerns with dedicated modules
 - ✅ **Comprehensive Error Handling** - Custom error types with proper HTTP responses
 - ✅ **Input Validation** - Request validation with detailed error messages
 - ✅ **Structured Logging** - Tracing-based logging for debugging and monitoring
-- ✅ **Configuration Management** - Environment-based configuration with multiple sources
+- ✅ **TOML Configuration** - Type-safe configuration with environment overrides
 - ✅ **CORS Support** - Configurable CORS for frontend integration
 - ✅ **Document History** - Full version history with timestamps and IP tracking
 - ✅ **Search Functionality** - PostgreSQL-powered full-text search
 - ✅ **Docker Support** - Complete Docker setup for development and production
 - ✅ **Comprehensive Testing** - Unit and integration tests
+
+## Project Structure
+
+```
+backend/
+├── src/
+│   ├── main.rs          # Application entry point
+│   ├── app.rs           # Router and application setup
+│   ├── handlers.rs      # API endpoint handlers
+│   ├── database.rs      # Database operations
+│   ├── models.rs        # Data structures
+│   ├── config.rs        # Configuration management
+│   ├── error.rs         # Custom error types
+│   └── tests.rs         # Unit tests
+├── config/
+│   ├── default.toml     # Default configuration
+│   ├── development.toml # Development overrides
+│   └── production.toml  # Production overrides
+├── migrations/          # Database migrations
+└── tests/              # Integration tests
+```
 
 ## Quick Start
 
@@ -42,313 +64,249 @@ A production-ready Rust backend for collaborative document editing with PostgreS
    sudo systemctl start postgresql
    ```
 
-2. **Set up environment variables:**
+2. **Create the database and user:**
    ```bash
-   # Copy the example environment file
-   cp env.example .env
+   # Connect to PostgreSQL
+   psql -U postgres
    
-   # Edit .env with your settings
-   nano .env
+   # Create database and user
+   CREATE DATABASE collaborative_docs;
+   CREATE USER collaborative_user WITH PASSWORD 'collaborative_password';
+   GRANT ALL PRIVILEGES ON DATABASE collaborative_docs TO collaborative_user;
+   \q
    ```
 
-3. **Create the database:**
-   ```bash
-   createdb collaborative_docs
-   ```
-
-4. **Run migrations:**
+3. **Run migrations:**
    ```bash
    cargo install sqlx-cli
    sqlx database create
    sqlx migrate run
    ```
 
-5. **Start the server:**
+4. **Start the server:**
    ```bash
    cargo run
    ```
 
 ## Configuration
 
-The application supports multiple configuration sources with the following precedence (highest to lowest):
+The application uses a **TOML-first configuration approach** with the following precedence (highest to lowest):
 
-1. **Environment variables** (highest priority)
+1. **Environment variables** (for overrides)
 2. **Configuration files** (`config/default.toml`, `config/{RUN_MODE}.toml`)
 3. **Default values** (lowest priority)
 
-### Environment Variables
-
-#### Individual Database Settings
-```bash
-# Database configuration
-APP__DATABASE__HOST=localhost
-APP__DATABASE__PORT=5432
-APP__DATABASE__USERNAME=postgres
-APP__DATABASE__PASSWORD=your_secure_password
-APP__DATABASE__DATABASE=collaborative_docs
-APP__DATABASE__MAX_CONNECTIONS=10
-APP__DATABASE__MIN_CONNECTIONS=2
-```
-
-#### Single DATABASE_URL (Alternative)
-```bash
-# Single database URL (takes precedence over individual settings)
-DATABASE_URL=postgresql://username:password@host:port/database
-```
-
-#### Server Configuration
-```bash
-# Server settings
-APP__SERVER__HOST=0.0.0.0
-APP__SERVER__PORT=3000
-```
-
-#### CORS Configuration
-```bash
-# CORS settings
-APP__CORS__ALLOWED_ORIGINS=["http://localhost:5173","https://yourdomain.com"]
-APP__CORS__ALLOWED_METHODS=["GET","POST","PUT","DELETE"]
-```
-
-#### Application Mode
-```bash
-# Set application mode
-RUN_MODE=development  # or staging, production
-RUST_LOG=info        # Logging level
-```
-
 ### Configuration Files
 
-The application looks for configuration files in the `config/` directory:
+#### `config/default.toml`
+```toml
+[server]
+host = "0.0.0.0"
+port = 3000
 
-- `config/default.toml` - Default configuration
-- `config/development.toml` - Development-specific settings
-- `config/production.toml` - Production-specific settings
+[database]
+host = "localhost"
+port = 5432
+username = "postgres"
+password = "password"
+database = "collaborative_docs"
+max_connections = 10
+min_connections = 2
 
-### Production Deployment
-
-#### Using Docker Compose
-
-1. **Set environment variables:**
-   ```bash
-   export POSTGRES_PASSWORD="your_secure_password"
-   export CORS_ORIGINS='["https://yourdomain.com"]'
-   ```
-
-2. **Start production services:**
-   ```bash
-   docker-compose -f docker-compose.prod.yml up -d
-   ```
-
-#### Manual Production Setup
-
-1. **Create production environment file:**
-   ```bash
-   cp env.example .env.production
-   ```
-
-2. **Edit production settings:**
-   ```bash
-   RUN_MODE=production
-   APP__DATABASE__PASSWORD=your_secure_password
-   APP__CORS__ALLOWED_ORIGINS=["https://yourdomain.com"]
-   RUST_LOG=warn
-   ```
-
-3. **Start with production config:**
-   ```bash
-   RUN_MODE=production cargo run
-   ```
-
-### Cloud Platform Deployment
-
-For cloud platforms (Heroku, Railway, etc.), use the `DATABASE_URL` environment variable:
-
-```bash
-DATABASE_URL=postgresql://username:password@host:port/database
-```
-
-The application will automatically parse this URL and configure the database connection.
-
-## API Endpoints
-
-### Create Document
-```http
-POST /api/doc
-```
-
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000"
-}
-```
-
-### Get Document
-```http
-GET /api/doc/{id}
-```
-
-**Response:**
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "content": "Document content",
-  "created_at": "2024-01-01T00:00:00Z",
-  "updated_at": "2024-01-01T00:00:00Z"
-}
-```
-
-### Update Document
-```http
-PUT /api/doc/{id}
-Content-Type: application/json
-
-{
-  "content": "Updated content"
-}
-```
-
-### Get Document History
-```http
-GET /api/doc/{id}/history
-```
-
-**Response:**
-```json
-[
-  {
-    "timestamp": "2024-01-01T00:00:00Z",
-    "ip_address": "127.0.0.1",
-    "content": "Previous content"
-  }
+[cors]
+allowed_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000"
+]
+allowed_methods = [
+    "GET",
+    "POST", 
+    "PUT",
+    "DELETE"
 ]
 ```
 
-### Get Document Stats
-```http
-GET /api/doc/{id}/stats
+#### `config/development.toml`
+```toml
+[database]
+database = "collaborative_docs_dev"
+
+[cors]
+allowed_origins = [
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:5173"
+]
 ```
 
-**Response:**
-```json
-{
-  "history_count": 5,
-  "last_updated": "2024-01-01T00:00:00Z"
-}
+#### `config/production.toml`
+```toml
+[database]
+password = "CHANGE_ME_IN_PRODUCTION"
+
+[cors]
+allowed_origins = [
+    "https://yourdomain.com"
+]
 ```
 
-### Search Documents
-```http
-GET /api/search?q=search_term
+### Environment Variables
+
+You can override any configuration value using environment variables:
+
+```bash
+# Set the run mode (determines which TOML file to load)
+RUN_MODE=development
+
+# Override individual settings
+APP__SERVER__PORT=8080
+APP__DATABASE__PASSWORD=my_secure_password
+
+# Use a single DATABASE_URL (for cloud platforms)
+DATABASE_URL=postgresql://username:password@host:port/database
+
+# Set logging level
+RUST_LOG=info
+```
+
+## API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/doc` | Create a new document |
+| `GET` | `/api/doc/{id}` | Get a document by ID |
+| `PUT` | `/api/doc/{id}` | Update a document's content |
+| `GET` | `/api/doc/{id}/history` | Get document version history |
+| `GET` | `/api/doc/{id}/stats` | Get document statistics |
+| `GET` | `/api/search?q=query` | Search documents by content |
+
+### Example Usage
+
+```bash
+# Create a document
+curl -X POST http://localhost:3000/api/doc
+
+# Get a document
+curl http://localhost:3000/api/doc/{document_id}
+
+# Update a document
+curl -X PUT http://localhost:3000/api/doc/{document_id} \
+  -H "Content-Type: application/json" \
+  -d '{"content": "Hello, World!"}'
+
+# Get document history
+curl http://localhost:3000/api/doc/{document_id}/history
+
+# Search documents
+curl "http://localhost:3000/api/search?q=hello"
 ```
 
 ## Development
 
 ### Running Tests
+
 ```bash
-# Unit tests
+# Run all tests
 cargo test
 
-# Integration tests
-cargo test --test integration_test
+# Run tests with output
+cargo test -- --nocapture
+
+# Run specific test
+cargo test test_create_document
 ```
 
-### Database Migrations
+### Code Structure
+
+The codebase follows Rust best practices with clear separation of concerns:
+
+- **`main.rs`** - Clean entry point, handles startup and logging
+- **`app.rs`** - Router configuration and middleware setup
+- **`handlers.rs`** - All API endpoint handlers
+- **`database.rs`** - Database operations and connection management
+- **`models.rs`** - Data structures and validation
+- **`config.rs`** - Configuration loading and validation
+- **`error.rs`** - Custom error types and HTTP responses
+- **`tests.rs`** - Unit tests for all functionality
+
+### Adding New Features
+
+1. **Add new models** in `src/models.rs`
+2. **Add database operations** in `src/database.rs`
+3. **Add handlers** in `src/handlers.rs`
+4. **Add routes** in `src/app.rs`
+5. **Add tests** in `src/tests.rs`
+
+## Production Deployment
+
+### Using Docker
+
 ```bash
-# Create a new migration
-sqlx migrate add migration_name
+# Build and run with Docker Compose
+docker-compose -f docker-compose.prod.yml up -d
+
+# Or build manually
+docker build -t collaborative-docs .
+docker run -p 3000:3000 collaborative-docs
+```
+
+### Environment Variables for Production
+
+```bash
+RUN_MODE=production
+RUST_LOG=warn
+DATABASE_URL=postgresql://user:pass@host:5432/db
+```
+
+### Database Setup
+
+```bash
+# Create production database
+createdb collaborative_docs_prod
 
 # Run migrations
 sqlx migrate run
 
-# Revert last migration
-sqlx migrate revert
+# Optional: Create read-only user for analytics
+CREATE USER readonly_user WITH PASSWORD 'readonly_password';
+GRANT CONNECT ON DATABASE collaborative_docs_prod TO readonly_user;
+GRANT USAGE ON SCHEMA public TO readonly_user;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO readonly_user;
 ```
 
-### Configuration Testing
-```bash
-# Test configuration loading
-cargo run -- --config-test
+## Monitoring and Logging
 
-# Run with specific environment
-RUN_MODE=development cargo run
-```
-
-## Production Deployment
-
-### Docker Deployment
-```bash
-# Development
-docker-compose up -d
-
-# Production
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-### Manual Deployment
-1. Set up PostgreSQL with proper security
-2. Configure environment variables
-3. Run migrations
-4. Start the application with a process manager (systemd, supervisor, etc.)
-
-### Security Considerations
-- Use strong database passwords
-- Configure proper CORS origins
-- Set up rate limiting
-- Use HTTPS in production
-- Implement authentication/authorization
-- Regular database backups
-- Use environment variables for secrets
-- Validate all configuration values
-
-## Architecture
-
-```
-src/
-├── main.rs          # Application entry point
-├── config.rs        # Configuration management
-├── database.rs      # Database operations
-├── error.rs         # Custom error types
-└── models.rs        # Data structures
-
-config/              # Configuration files
-├── default.toml     # Default configuration
-├── development.toml # Development settings
-└── production.toml  # Production settings
-
-migrations/          # Database migrations
-tests/              # Integration tests
-```
-
-## Performance
-
-- **Connection Pooling**: SQLx provides efficient connection pooling
-- **Indexes**: Proper database indexing for fast queries
-- **Transactions**: ACID-compliant operations
-- **Async/Await**: Non-blocking I/O operations
-- **Configuration Caching**: Efficient configuration loading
-
-## Monitoring
-
-The application includes structured logging with tracing:
+The application uses structured logging with different levels:
 
 ```bash
-# Set log level
-RUST_LOG=info cargo run
+# Set logging level
+RUST_LOG=debug  # Most verbose
+RUST_LOG=info   # Default
+RUST_LOG=warn   # Production
+RUST_LOG=error  # Errors only
+```
 
-# Production logging
-RUST_LOG=warn cargo run
+### Health Checks
+
+```bash
+# Check if server is running
+curl http://localhost:3000/api/doc
+
+# Check database connectivity
+# (The application will log connection status on startup)
 ```
 
 ## Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests
-5. Submit a pull request
+1. **Fork the repository**
+2. **Create a feature branch** (`git checkout -b feature/amazing-feature`)
+3. **Make your changes** following the existing code structure
+4. **Add tests** for new functionality
+5. **Run tests** (`cargo test`)
+6. **Commit your changes** (`git commit -m 'Add amazing feature'`)
+7. **Push to the branch** (`git push origin feature/amazing-feature`)
+8. **Open a Pull Request**
 
 ## License
 
-MIT License - see LICENSE file for details. 
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details. 

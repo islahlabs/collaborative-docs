@@ -59,11 +59,6 @@ impl Default for AppConfig {
 
 impl AppConfig {
     pub fn load() -> Result<Self, config::ConfigError> {
-        // Load .env file if it exists
-        if let Ok(_) = dotenvy::dotenv() {
-            tracing::info!("Loaded .env file");
-        }
-
         let run_mode = env::var("RUN_MODE").unwrap_or_else(|_| "development".into());
         tracing::info!("Running in {} mode", run_mode);
 
@@ -83,8 +78,8 @@ impl AppConfig {
             // Load config files
             .add_source(File::with_name("config/default").required(false))
             .add_source(File::with_name(&format!("config/{}", run_mode)).required(false))
-            // Load from environment variables
-            .add_source(Environment::with_prefix("APP").separator("__"))
+            // Load from environment variables for overrides
+            .add_source(Environment::with_prefix("APP").separator("__").ignore_empty(true))
             .build()?;
 
         let mut app_config: AppConfig = config.try_deserialize()?;
