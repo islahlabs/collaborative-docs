@@ -35,9 +35,8 @@ describe('App Component', () => {
     it('should have a "Create New Document" button', () => {
       renderApp()
       
-      const createButton = screen.getByRole('link', { name: /create new document/i })
+      const createButton = screen.getByRole('button', { name: /create new document/i })
       expect(createButton).toBeInTheDocument()
-      expect(createButton).toHaveAttribute('href', '/doc/new-document')
     })
 
     it('should have proper icons and styling', () => {
@@ -48,7 +47,7 @@ describe('App Component', () => {
       expect(fileIcon).toBeInTheDocument()
       
       // Check for the button with arrow icon
-      const createButton = screen.getByRole('link', { name: /create new document/i })
+      const createButton = screen.getByRole('button', { name: /create new document/i })
       expect(createButton).toBeInTheDocument()
       
       // Check for the arrow icon

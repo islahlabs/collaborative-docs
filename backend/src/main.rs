@@ -130,7 +130,91 @@ mod tests {
         assert_eq!(history_response.status_code(), StatusCode::OK);
         let history: Vec<DocumentHistory> = history_response.json();
         assert!(!history.is_empty());
-        assert_eq!(history.len(), 2); // Initial empty + update
+        assert_eq!(history.len(), 1); // Only the update (no initial empty entry)
+        assert_eq!(history[0].content, "Updated content");
+    }
+
+    #[tokio::test]
+    async fn test_multiple_updates_create_history() {
+        let server = create_test_app().await;
+        
+        // Create document
+        let create_response = server
+            .post("/api/doc")
+            .await;
+        let create_body: CreateDocumentResponse = create_response.json();
+        
+        // First update
+        server
+            .put(&format!("/api/doc/{}", create_body.id))
+            .json(&json!({ "content": "First version" }))
+            .await;
+        
+        // Second update
+        server
+            .put(&format!("/api/doc/{}", create_body.id))
+            .json(&json!({ "content": "Second version" }))
+            .await;
+        
+        // Third update
+        server
+            .put(&format!("/api/doc/{}", create_body.id))
+            .json(&json!({ "content": "Third version" }))
+            .await;
+        
+        // Get history
+        let history_response = server
+            .get(&format!("/api/doc/{}/history", create_body.id))
+            .await;
+        
+        assert_eq!(history_response.status_code(), StatusCode::OK);
+        let history: Vec<DocumentHistory> = history_response.json();
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[0].content, "First version");
+        assert_eq!(history[1].content, "Second version");
+        assert_eq!(history[2].content, "Third version");
+    }
+
+    #[tokio::test]
+    async fn test_history_timestamps_and_ip() {
+        let server = create_test_app().await;
+        
+        // Create document
+        let create_response = server
+            .post("/api/doc")
+            .await;
+        let create_body: CreateDocumentResponse = create_response.json();
+        
+        // Update document
+        server
+            .put(&format!("/api/doc/{}", create_body.id))
+            .json(&json!({ "content": "Test content" }))
+            .await;
+        
+        // Get history
+        let history_response = server
+            .get(&format!("/api/doc/{}/history", create_body.id))
+            .await;
+        
+        assert_eq!(history_response.status_code(), StatusCode::OK);
+        let history: Vec<DocumentHistory> = history_response.json();
+        assert_eq!(history.len(), 1);
+        
+        let entry = &history[0];
+        assert_eq!(entry.content, "Test content");
+        assert_eq!(entry.ip_address, "127.0.0.1");
+        assert!(!entry.timestamp.to_string().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_history_for_nonexistent_document() {
+        let server = create_test_app().await;
+        
+        let response = server
+            .get("/api/doc/nonexistent-id/history")
+            .await;
+        
+        assert_eq!(response.status_code(), StatusCode::NOT_FOUND);
     }
 }
 
@@ -200,11 +284,7 @@ async fn create_document(State(state): State<AppState>) -> Json<CreateDocumentRe
         updated_at: now,
     };
 
-    let history = vec![DocumentHistory {
-        timestamp: now,
-        ip_address: "127.0.0.1".to_string(), // TODO: Extract real IP
-        content: String::new(),
-    }];
+    let history = vec![]; // Start with empty history, will be populated on first update
 
     state.write().unwrap().insert(id.clone(), (document, history));
 
@@ -234,16 +314,16 @@ async fn update_document(
     if let Some((document, history)) = state.get_mut(&id) {
         let now = Utc::now();
         
-        // Add to history
+        // Update document
+        document.content = payload.content.clone();
+        document.updated_at = now;
+
+        // Add to history with the new content
         history.push(DocumentHistory {
             timestamp: now,
             ip_address: "127.0.0.1".to_string(), // TODO: Extract real IP
-            content: document.content.clone(),
+            content: payload.content,
         });
-
-        // Update document
-        document.content = payload.content;
-        document.updated_at = now;
 
         Ok(Json(document.clone()))
     } else {
