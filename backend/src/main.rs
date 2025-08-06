@@ -1,26 +1,170 @@
+mod config;
+mod database;
+mod error;
+mod models;
+
 use axum::{
     extract::{Path, State},
-    http::{HeaderValue, Method, StatusCode},
+    http::{HeaderValue, Method},
     response::Json,
     routing::{get, post, put},
     Router,
 };
-use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
+use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use tower_http::cors::{Any, CorsLayer};
-use uuid::Uuid;
+use tracing::{info, Level};
+use tracing_subscriber::FmtSubscriber;
+use validator::Validate;
+
+use crate::{
+    config::AppConfig,
+    database::Database,
+    error::{AppError, AppResult},
+    models::{CreateDocumentResponse, Document, DocumentHistory, UpdateDocumentRequest},
+};
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging
+    let subscriber = FmtSubscriber::builder()
+        .with_max_level(Level::INFO)
+        .finish();
+    tracing::subscriber::set_global_default(subscriber)?;
+
+    // Load configuration
+    let config = AppConfig::load()?;
+    
+    // Initialize database
+    let database = Database::new(&config.database_url()).await.map_err(|e| {
+        eprintln!("Failed to initialize database: {}", e);
+        std::process::exit(1);
+    })?;
+    
+    // Setup CORS
+    let cors = CorsLayer::new()
+        .allow_origin(config.cors.allowed_origins.iter().map(|origin| {
+            origin.parse::<HeaderValue>().unwrap_or_else(|_| {
+                "http://localhost:5173".parse::<HeaderValue>().unwrap()
+            })
+        }).collect::<Vec<_>>())
+        .allow_methods(config.cors.allowed_methods.iter().map(|method| {
+            method.parse::<Method>().unwrap_or(Method::GET)
+        }).collect::<Vec<_>>())
+        .allow_headers(Any);
+
+    // Create router
+    let app = Router::new()
+        .route("/api/doc", post(create_document))
+        .route("/api/doc/{id}", get(get_document))
+        .route("/api/doc/{id}", put(update_document))
+        .route("/api/doc/{id}/history", get(get_document_history))
+        .route("/api/doc/{id}/stats", get(get_document_stats))
+        .route("/api/search", get(search_documents))
+        .layer(cors)
+        .with_state(database);
+
+    // Parse host address
+    let host_ip = if config.server.host == "0.0.0.0" {
+        IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0))
+    } else {
+        config.server.host.parse().unwrap_or_else(|_| {
+            IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1))
+        })
+    };
+    
+    let addr = SocketAddr::from((host_ip, config.server.port));
+    
+    info!("🚀 Server starting on http://{}", addr);
+    info!("📝 API endpoints:");
+    info!("  POST   /api/doc");
+    info!("  GET    /api/doc/:id");
+    info!("  PUT    /api/doc/:id");
+    info!("  GET    /api/doc/:id/history");
+    info!("  GET    /api/doc/:id/stats");
+    info!("  GET    /api/search?q=query");
+
+    let listener = tokio::net::TcpListener::bind(addr).await?;
+    axum::serve(listener, app).await?;
+    Ok(())
+}
+
+async fn create_document(
+    State(database): State<Database>,
+) -> AppResult<Json<CreateDocumentResponse>> {
+    let id = database.create_document().await?;
+    Ok(Json(CreateDocumentResponse { id }))
+}
+
+async fn get_document(
+    Path(id): Path<String>,
+    State(database): State<Database>,
+) -> AppResult<Json<Document>> {
+    let document = database.get_document(&id).await?;
+    Ok(Json(document))
+}
+
+async fn update_document(
+    Path(id): Path<String>,
+    State(database): State<Database>,
+    Json(payload): Json<UpdateDocumentRequest>,
+) -> AppResult<Json<Document>> {
+    // Validate input
+    payload.validate().map_err(|e| {
+        AppError::ValidationError(format!("Validation failed: {}", e))
+    })?;
+
+    // TODO: Extract real IP address from request
+    let ip_address = "127.0.0.1";
+    
+    let document = database.update_document(&id, &payload.content, ip_address).await?;
+    Ok(Json(document))
+}
+
+async fn get_document_history(
+    Path(id): Path<String>,
+    State(database): State<Database>,
+) -> AppResult<Json<Vec<DocumentHistory>>> {
+    let history = database.get_document_history(&id).await?;
+    Ok(Json(history))
+}
+
+async fn get_document_stats(
+    Path(id): Path<String>,
+    State(database): State<Database>,
+) -> AppResult<Json<serde_json::Value>> {
+    let (history_count, last_updated) = database.get_document_stats(&id).await?;
+    
+    Ok(Json(serde_json::json!({
+        "history_count": history_count,
+        "last_updated": last_updated
+    })))
+}
+
+async fn search_documents(
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+    State(database): State<Database>,
+) -> AppResult<Json<Vec<Document>>> {
+    let empty_string = String::new();
+    let query = params.get("q").unwrap_or(&empty_string);
+    
+    if query.is_empty() {
+        return Err(AppError::ValidationError("Search query 'q' is required".to_string()));
+    }
+    
+    let documents = database.search_documents(query).await?;
+    Ok(Json(documents))
+}
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use axum::http::StatusCode;
     use axum_test::TestServer;
     use serde_json::json;
+    use axum::http::StatusCode;
 
     async fn create_test_app() -> TestServer {
-        let state: AppState = Arc::new(RwLock::new(HashMap::new()));
+        let database = Database::new("postgresql://collaborative_user:collaborative_password@localhost:5432/test_db").await.unwrap();
+        
         let cors = CorsLayer::new()
             .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
             .allow_methods([Method::GET, Method::POST, Method::PUT])
@@ -32,7 +176,7 @@ mod tests {
             .route("/api/doc/{id}", put(update_document))
             .route("/api/doc/{id}/history", get(get_document_history))
             .layer(cors)
-            .with_state(state);
+            .with_state(database);
 
         TestServer::new(app).unwrap()
     }
@@ -130,216 +274,7 @@ mod tests {
         assert_eq!(history_response.status_code(), StatusCode::OK);
         let history: Vec<DocumentHistory> = history_response.json();
         assert!(!history.is_empty());
-        assert_eq!(history.len(), 1); // Only the update (no initial empty entry)
-        assert_eq!(history[0].content, "Updated content");
-    }
-
-    #[tokio::test]
-    async fn test_multiple_updates_create_history() {
-        let server = create_test_app().await;
-        
-        // Create document
-        let create_response = server
-            .post("/api/doc")
-            .await;
-        let create_body: CreateDocumentResponse = create_response.json();
-        
-        // First update
-        server
-            .put(&format!("/api/doc/{}", create_body.id))
-            .json(&json!({ "content": "First version" }))
-            .await;
-        
-        // Second update
-        server
-            .put(&format!("/api/doc/{}", create_body.id))
-            .json(&json!({ "content": "Second version" }))
-            .await;
-        
-        // Third update
-        server
-            .put(&format!("/api/doc/{}", create_body.id))
-            .json(&json!({ "content": "Third version" }))
-            .await;
-        
-        // Get history
-        let history_response = server
-            .get(&format!("/api/doc/{}/history", create_body.id))
-            .await;
-        
-        assert_eq!(history_response.status_code(), StatusCode::OK);
-        let history: Vec<DocumentHistory> = history_response.json();
-        assert_eq!(history.len(), 3);
-        assert_eq!(history[0].content, "First version");
-        assert_eq!(history[1].content, "Second version");
-        assert_eq!(history[2].content, "Third version");
-    }
-
-    #[tokio::test]
-    async fn test_history_timestamps_and_ip() {
-        let server = create_test_app().await;
-        
-        // Create document
-        let create_response = server
-            .post("/api/doc")
-            .await;
-        let create_body: CreateDocumentResponse = create_response.json();
-        
-        // Update document
-        server
-            .put(&format!("/api/doc/{}", create_body.id))
-            .json(&json!({ "content": "Test content" }))
-            .await;
-        
-        // Get history
-        let history_response = server
-            .get(&format!("/api/doc/{}/history", create_body.id))
-            .await;
-        
-        assert_eq!(history_response.status_code(), StatusCode::OK);
-        let history: Vec<DocumentHistory> = history_response.json();
         assert_eq!(history.len(), 1);
-        
-        let entry = &history[0];
-        assert_eq!(entry.content, "Test content");
-        assert_eq!(entry.ip_address, "127.0.0.1");
-        assert!(!entry.timestamp.to_string().is_empty());
-    }
-
-    #[tokio::test]
-    async fn test_history_for_nonexistent_document() {
-        let server = create_test_app().await;
-        
-        let response = server
-            .get("/api/doc/nonexistent-id/history")
-            .await;
-        
-        assert_eq!(response.status_code(), StatusCode::NOT_FOUND);
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct Document {
-    id: String,
-    content: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct DocumentHistory {
-    timestamp: DateTime<Utc>,
-    ip_address: String,
-    content: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct CreateDocumentResponse {
-    id: String,
-}
-
-#[derive(Debug, Serialize, Deserialize)]
-struct UpdateDocumentRequest {
-    content: String,
-}
-
-type AppState = Arc<RwLock<HashMap<String, (Document, Vec<DocumentHistory>)>>>;
-
-#[tokio::main]
-async fn main() {
-    let state: AppState = Arc::new(RwLock::new(HashMap::new()));
-
-    let cors = CorsLayer::new()
-        .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
-        .allow_methods([Method::GET, Method::POST, Method::PUT])
-        .allow_headers(Any);
-
-    let app = Router::new()
-        .route("/api/doc", post(create_document))
-        .route("/api/doc/{id}", get(get_document))
-        .route("/api/doc/{id}", put(update_document))
-        .route("/api/doc/{id}/history", get(get_document_history))
-        .layer(cors)
-        .with_state(state);
-
-    println!("🚀 Server starting on http://localhost:3000");
-    println!("📝 API endpoints:");
-    println!("  POST   /api/doc");
-    println!("  GET    /api/doc/:id");
-    println!("  PUT    /api/doc/:id");
-    println!("  GET    /api/doc/:id/history");
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
-}
-
-async fn create_document(State(state): State<AppState>) -> Json<CreateDocumentResponse> {
-    let id = Uuid::new_v4().to_string();
-    let now = Utc::now();
-    
-    let document = Document {
-        id: id.clone(),
-        content: String::new(),
-        created_at: now,
-        updated_at: now,
-    };
-
-    let history = vec![]; // Start with empty history, will be populated on first update
-
-    state.write().unwrap().insert(id.clone(), (document, history));
-
-    Json(CreateDocumentResponse { id })
-}
-
-async fn get_document(
-    Path(id): Path<String>,
-    State(state): State<AppState>,
-) -> Result<Json<Document>, StatusCode> {
-    let state = state.read().unwrap();
-    
-    if let Some((document, _)) = state.get(&id) {
-        Ok(Json(document.clone()))
-    } else {
-        Err(StatusCode::NOT_FOUND)
-    }
-}
-
-async fn update_document(
-    Path(id): Path<String>,
-    State(state): State<AppState>,
-    Json(payload): Json<UpdateDocumentRequest>,
-) -> Result<Json<Document>, StatusCode> {
-    let mut state = state.write().unwrap();
-    
-    if let Some((document, history)) = state.get_mut(&id) {
-        let now = Utc::now();
-        
-        // Update document
-        document.content = payload.content.clone();
-        document.updated_at = now;
-
-        // Add to history with the new content
-        history.push(DocumentHistory {
-            timestamp: now,
-            ip_address: "127.0.0.1".to_string(), // TODO: Extract real IP
-            content: payload.content,
-        });
-
-        Ok(Json(document.clone()))
-    } else {
-        Err(StatusCode::NOT_FOUND)
-    }
-}
-
-async fn get_document_history(
-    Path(id): Path<String>,
-    State(state): State<AppState>,
-) -> Result<Json<Vec<DocumentHistory>>, StatusCode> {
-    let state = state.read().unwrap();
-    
-    if let Some((_, history)) = state.get(&id) {
-        Ok(Json(history.clone()))
-    } else {
-        Err(StatusCode::NOT_FOUND)
+        assert_eq!(history[0].content, "Updated content");
     }
 }

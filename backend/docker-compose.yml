@@ -1,0 +1,58 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: collaborative_docs
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Application mode
+      - RUN_MODE=development
+      
+      # Database configuration (using individual settings)
+      - APP__DATABASE__HOST=postgres
+      - APP__DATABASE__PORT=5432
+      - APP__DATABASE__USERNAME=postgres
+      - APP__DATABASE__PASSWORD=password
+      - APP__DATABASE__DATABASE=collaborative_docs
+      - APP__DATABASE__MAX_CONNECTIONS=10
+      - APP__DATABASE__MIN_CONNECTIONS=2
+      
+      # Server configuration
+      - APP__SERVER__HOST=0.0.0.0
+      - APP__SERVER__PORT=3000
+      
+      # CORS configuration
+      - APP__CORS__ALLOWED_ORIGINS=["http://localhost:5173","http://localhost:3000"]
+      - APP__CORS__ALLOWED_METHODS=["GET","POST","PUT","DELETE"]
+      
+      # Logging
+      - RUST_LOG=info
+      
+      # Alternative: Use DATABASE_URL instead of individual settings
+      # - DATABASE_URL=postgresql://postgres:password@postgres:5432/collaborative_docs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/app/migrations
+
+volumes:
+  postgres_data:

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) as history_count, MAX(timestamp) as last_updated FROM document_history WHERE document_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "history_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "last_updated",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      null,
+      null
+    ]
+  },
+  "hash": "dfd5c9abac3be0011f6aed0dedb6b6aa70ebaf456a619f4f0536e1d6074e2f1c"
+}

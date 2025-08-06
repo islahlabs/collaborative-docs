@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-collaborative_docs}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      # Application mode
+      - RUN_MODE=production
+      
+      # Database configuration
+      - APP__DATABASE__HOST=postgres
+      - APP__DATABASE__PORT=5432
+      - APP__DATABASE__USERNAME=${POSTGRES_USER:-postgres}
+      - APP__DATABASE__PASSWORD=${POSTGRES_PASSWORD}
+      - APP__DATABASE__DATABASE=${POSTGRES_DB:-collaborative_docs}
+      - APP__DATABASE__MAX_CONNECTIONS=20
+      - APP__DATABASE__MIN_CONNECTIONS=5
+      
+      # Server configuration
+      - APP__SERVER__HOST=0.0.0.0
+      - APP__SERVER__PORT=3000
+      
+      # CORS configuration (update with your domain)
+      - APP__CORS__ALLOWED_ORIGINS=${CORS_ORIGINS:-["https://yourdomain.com"]}
+      - APP__CORS__ALLOWED_METHODS=["GET","POST","PUT"]
+      
+      # Logging
+      - RUST_LOG=warn
+      
+      # Alternative: Use DATABASE_URL
+      # - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-collaborative_docs}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - ./migrations:/app/migrations
+    restart: unless-stopped
+
+volumes:
+  postgres_data: 
