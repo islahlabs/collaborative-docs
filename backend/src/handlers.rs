@@ -5,7 +5,7 @@ use axum::{
 use validator::Validate;
 
 use crate::{
-    database::Database,
+    app::AppState,
     error::{AppError, AppResult},
     models::{CreateDocumentResponse, Document, DocumentHistory, UpdateDocumentRequest},
     crdt::{DocumentUpdate, DocumentState},
@@ -13,25 +13,25 @@ use crate::{
 
 /// Create a new document
 pub async fn create_document(
-    State(database): State<Database>,
+    State(state): State<AppState>,
 ) -> AppResult<Json<CreateDocumentResponse>> {
-    let id = database.create_document().await?;
+    let id = state.database.create_document().await?;
     Ok(Json(CreateDocumentResponse { id }))
 }
 
 /// Get a document by ID
 pub async fn get_document(
     Path(id): Path<String>,
-    State(database): State<Database>,
+    State(state): State<AppState>,
 ) -> AppResult<Json<Document>> {
-    let document = database.get_document(&id).await?;
+    let document = state.database.get_document(&id).await?;
     Ok(Json(document))
 }
 
 /// Update a document's content
 pub async fn update_document(
     Path(id): Path<String>,
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Json(payload): Json<UpdateDocumentRequest>,
 ) -> AppResult<Json<Document>> {
     // Validate input
@@ -42,25 +42,25 @@ pub async fn update_document(
     // TODO: Extract real IP address from request
     let ip_address = "127.0.0.1";
     
-    let document = database.update_document(&id, &payload.content, ip_address).await?;
+    let document = state.database.update_document(&id, &payload.content, ip_address).await?;
     Ok(Json(document))
 }
 
 /// Get document history
 pub async fn get_document_history(
     Path(id): Path<String>,
-    State(database): State<Database>,
+    State(state): State<AppState>,
 ) -> AppResult<Json<Vec<DocumentHistory>>> {
-    let history = database.get_document_history(&id).await?;
+    let history = state.database.get_document_history(&id).await?;
     Ok(Json(history))
 }
 
 /// Get document statistics
 pub async fn get_document_stats(
     Path(id): Path<String>,
-    State(database): State<Database>,
+    State(state): State<AppState>,
 ) -> AppResult<Json<serde_json::Value>> {
-    let (history_count, last_updated) = database.get_document_stats(&id).await?;
+    let (history_count, last_updated) = state.database.get_document_stats(&id).await?;
     
     Ok(Json(serde_json::json!({
         "history_count": history_count,
@@ -71,7 +71,7 @@ pub async fn get_document_stats(
 /// Search documents by content
 pub async fn search_documents(
     axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
-    State(database): State<Database>,
+    State(state): State<AppState>,
 ) -> AppResult<Json<Vec<Document>>> {
     let empty_string = String::new();
     let query = params.get("q").unwrap_or(&empty_string);
@@ -80,26 +80,26 @@ pub async fn search_documents(
         return Err(AppError::ValidationError("Search query 'q' is required".to_string()));
     }
     
-    let documents = database.search_documents(query).await?;
+    let documents = state.database.search_documents(query).await?;
     Ok(Json(documents))
 }
 
 /// CRDT: Get document state (for real-time sync)
 pub async fn get_document_crdt_state(
     Path(id): Path<String>,
-    State(database): State<Database>,
+    State(state): State<AppState>,
 ) -> AppResult<Json<DocumentState>> {
-    let state = database.get_document_crdt_state(&id).await?;
+    let state = state.database.get_document_crdt_state(&id).await?;
     Ok(Json(state))
 }
 
 /// CRDT: Apply update from another client
 pub async fn apply_crdt_update(
     Path(id): Path<String>,
-    State(database): State<Database>,
+    State(state): State<AppState>,
     Json(update): Json<DocumentUpdate>,
 ) -> AppResult<Json<serde_json::Value>> {
-    database.apply_crdt_update(&id, &update).await?;
+    state.database.apply_crdt_update(&id, &update).await?;
     Ok(Json(serde_json::json!({
         "status": "success",
         "message": "Update applied successfully"

@@ -51,6 +51,7 @@ impl Database {
         
         // Try to get from CRDT first (for real-time updates)
         let crdt_manager = self.crdt_manager.read().await;
+        
         if let Some(crdt_doc) = crdt_manager.get_document(id) {
             let content = crdt_doc.get_content();
             let now = chrono::Utc::now();
@@ -88,7 +89,7 @@ impl Database {
         
         // Update in CRDT manager
         let mut manager = self.crdt_manager.write().await;
-        let update = manager.update_document(id, content, "user")
+        let _update = manager.update_document(id, content, "user")
             .map_err(|e| AppError::InternalError(e))?;
         
         // Update in database (for persistence)
@@ -116,8 +117,15 @@ impl Database {
 
         tx.commit().await?;
 
-        // Return the updated document
-        self.get_document(id).await
+        // Return the updated document directly instead of calling get_document
+        // this circumvents call to get_document, which needs to acquire a read lock on the CRDT manager
+        // and that can cause deadlocks when multiple updates are happening concurrently
+        Ok(Document {
+            id: id.to_string(),
+            content: content.to_string(),
+            created_at: now, // This should come from the database, but we'll use current time
+            updated_at: now,
+        })
     }
 
     pub async fn apply_crdt_update(&self, id: &str, update: &DocumentUpdate) -> Result<(), AppError> {

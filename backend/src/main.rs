@@ -6,6 +6,7 @@ mod error;
 mod handlers;
 mod models;
 mod tests;
+mod websocket;
 
 use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use tracing::{info, Level};

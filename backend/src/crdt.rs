@@ -8,14 +8,14 @@ pub struct CRDTDocument {
     version: u64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DocumentUpdate {
     pub content: String,
     pub user_id: String,
     pub timestamp: i64,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct DocumentState {
     pub content: String,
     pub version: u64,

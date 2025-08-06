@@ -2,3 +2,5 @@
 *.env*
 config/*.toml
 !config/example*
+.vscode/
+/**/.vscode/
