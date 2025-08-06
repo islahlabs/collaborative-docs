@@ -1,5 +1,6 @@
 mod app;
 mod config;
+mod crdt;
 mod database;
 mod error;
 mod handlers;

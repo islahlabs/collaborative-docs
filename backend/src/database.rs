@@ -1,10 +1,14 @@
 use crate::{error::AppError, models::{Document, DocumentHistory}};
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+use crate::crdt::{DocumentManager, DocumentUpdate};
 
 #[derive(Clone)]
 pub struct Database {
     pool: PgPool,
+    crdt_manager: Arc<RwLock<DocumentManager>>,
 }
 
 impl Database {
@@ -14,13 +18,17 @@ impl Database {
         // Run migrations
         sqlx::migrate!("./migrations").run(&pool).await?;
         
-        Ok(Self { pool })
+        Ok(Self { 
+            pool,
+            crdt_manager: Arc::new(RwLock::new(DocumentManager::new())),
+        })
     }
 
     pub async fn create_document(&self) -> Result<String, AppError> {
         let id = Uuid::new_v4();
         let now = chrono::Utc::now();
         
+        // Create in database
         sqlx::query!(
             "INSERT INTO documents (id, content, created_at, updated_at) VALUES ($1, $2, $3, $4)",
             id,
@@ -31,12 +39,31 @@ impl Database {
         .execute(&self.pool)
         .await?;
 
+        // Create in CRDT manager
+        let mut manager = self.crdt_manager.write().await;
+        manager.create_document(id.to_string());
+
         Ok(id.to_string())
     }
 
     pub async fn get_document(&self, id: &str) -> Result<Document, AppError> {
         let uuid = Uuid::parse_str(id).map_err(|_| AppError::DocumentNotFound(id.to_string()))?;
         
+        // Try to get from CRDT first (for real-time updates)
+        let crdt_manager = self.crdt_manager.read().await;
+        if let Some(crdt_doc) = crdt_manager.get_document(id) {
+            let content = crdt_doc.get_content();
+            let now = chrono::Utc::now();
+            
+            return Ok(Document {
+                id: id.to_string(),
+                content,
+                created_at: now, // We'd need to store this in CRDT too
+                updated_at: now,
+            });
+        }
+        
+        // Fallback to database
         let row = sqlx::query!(
             "SELECT id, content, created_at, updated_at FROM documents WHERE id = $1",
             uuid
@@ -59,10 +86,14 @@ impl Database {
         let uuid = Uuid::parse_str(id).map_err(|_| AppError::DocumentNotFound(id.to_string()))?;
         let now = chrono::Utc::now();
         
-        // Start a transaction
+        // Update in CRDT manager
+        let mut manager = self.crdt_manager.write().await;
+        let update = manager.update_document(id, content, "user")
+            .map_err(|e| AppError::InternalError(e))?;
+        
+        // Update in database (for persistence)
         let mut tx = self.pool.begin().await?;
 
-        // Update the document
         sqlx::query!(
             "UPDATE documents SET content = $1, updated_at = $2 WHERE id = $3",
             content,
@@ -72,7 +103,7 @@ impl Database {
         .execute(&mut *tx)
         .await?;
 
-        // Add to history - use raw SQL to avoid type issues
+        // Add to history
         sqlx::query(
             "INSERT INTO document_history (document_id, content, ip_address, timestamp) VALUES ($1, $2, $3::inet, $4)"
         )
@@ -87,6 +118,22 @@ impl Database {
 
         // Return the updated document
         self.get_document(id).await
+    }
+
+    pub async fn apply_crdt_update(&self, id: &str, update: &DocumentUpdate) -> Result<(), AppError> {
+        let mut manager = self.crdt_manager.write().await;
+        manager.apply_update(id, update)
+            .map_err(|e| AppError::InternalError(e))?;
+        Ok(())
+    }
+
+    pub async fn get_document_crdt_state(&self, id: &str) -> Result<crate::crdt::DocumentState, AppError> {
+        let manager = self.crdt_manager.read().await;
+        if let Some(doc) = manager.get_document(id) {
+            Ok(doc.get_state())
+        } else {
+            Err(AppError::DocumentNotFound(id.to_string()))
+        }
     }
 
     pub async fn get_document_history(&self, id: &str) -> Result<Vec<DocumentHistory>, AppError> {

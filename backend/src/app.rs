@@ -10,7 +10,7 @@ use crate::{
     database::Database,
     handlers::{
         create_document, get_document, get_document_history, get_document_stats,
-        search_documents, update_document,
+        search_documents, update_document, get_document_crdt_state, apply_crdt_update,
     },
 };
 
@@ -36,6 +36,9 @@ pub fn create_app(database: Database, config: &AppConfig) -> Router {
         .route("/api/doc/{id}/history", get(get_document_history))
         .route("/api/doc/{id}/stats", get(get_document_stats))
         .route("/api/search", get(search_documents))
+        // CRDT routes for real-time collaboration
+        .route("/api/doc/{id}/crdt/state", get(get_document_crdt_state))
+        .route("/api/doc/{id}/crdt/update", post(apply_crdt_update))
         .layer(cors)
         .with_state(database)
 }

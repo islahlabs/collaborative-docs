@@ -8,6 +8,7 @@ use crate::{
     database::Database,
     error::{AppError, AppResult},
     models::{CreateDocumentResponse, Document, DocumentHistory, UpdateDocumentRequest},
+    crdt::{DocumentUpdate, DocumentState},
 };
 
 /// Create a new document
@@ -81,4 +82,26 @@ pub async fn search_documents(
     
     let documents = database.search_documents(query).await?;
     Ok(Json(documents))
+}
+
+/// CRDT: Get document state (for real-time sync)
+pub async fn get_document_crdt_state(
+    Path(id): Path<String>,
+    State(database): State<Database>,
+) -> AppResult<Json<DocumentState>> {
+    let state = database.get_document_crdt_state(&id).await?;
+    Ok(Json(state))
+}
+
+/// CRDT: Apply update from another client
+pub async fn apply_crdt_update(
+    Path(id): Path<String>,
+    State(database): State<Database>,
+    Json(update): Json<DocumentUpdate>,
+) -> AppResult<Json<serde_json::Value>> {
+    database.apply_crdt_update(&id, &update).await?;
+    Ok(Json(serde_json::json!({
+        "status": "success",
+        "message": "Update applied successfully"
+    })))
 } 
