@@ -3,11 +3,20 @@ import Editor from './components/Editor';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { FileText, ArrowRight } from 'lucide-react';
+import { api } from '@/services/api';
 
 function App() {
   const handleSave = (content: string) => {
-    // TODO: Implement save functionality
     console.log('Saving content:', content);
+  };
+
+  const handleCreateDocument = async () => {
+    try {
+      const response = await api.createDocument();
+      window.location.href = `/doc/${response.id}`;
+    } catch (error) {
+      console.error('Failed to create document:', error);
+    }
   };
 
   return (
@@ -29,11 +38,9 @@ function App() {
                   <p className="text-sm text-muted-foreground">
                     Navigate to <code className="bg-muted px-2 py-1 rounded font-mono text-sm">/doc/your-document-id</code> to start editing.
                   </p>
-                  <Button asChild>
-                    <a href="/doc/new-document" className="inline-flex items-center gap-2">
-                      Create New Document
-                      <ArrowRight className="h-4 w-4" />
-                    </a>
+                  <Button onClick={handleCreateDocument} className="inline-flex items-center gap-2">
+                    Create New Document
+                    <ArrowRight className="h-4 w-4" />
                   </Button>
                 </CardContent>
               </Card>

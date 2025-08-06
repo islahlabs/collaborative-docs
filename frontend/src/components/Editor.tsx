@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Save, Clock } from 'lucide-react';
+import { api } from '@/services/api';
 
 interface EditorProps {
   onSave?: (content: string) => void;
@@ -12,6 +13,8 @@ interface EditorProps {
 export default function Editor({ onSave }: EditorProps) {
   const [content, setContent] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const { id } = useParams<{ id: string }>();
 
@@ -21,13 +24,17 @@ export default function Editor({ onSave }: EditorProps) {
       let timeoutId: number;
       return (text: string) => {
         clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
+        timeoutId = setTimeout(async () => {
           setIsSaving(true);
-          // TODO: Call API to save document
-          console.log('Saving document:', id, text);
-          onSave?.(text);
-          setLastSaved(new Date());
-          setIsSaving(false);
+          try {
+            await api.updateDocument(id!, text);
+            onSave?.(text);
+            setLastSaved(new Date());
+          } catch (error) {
+            console.error('Failed to save document:', error);
+          } finally {
+            setIsSaving(false);
+          }
         }, 2000); // 2 second delay
       };
     })(),
@@ -43,8 +50,26 @@ export default function Editor({ onSave }: EditorProps) {
 
   // Load document content on mount
   useEffect(() => {
-    // TODO: Load document content from API
-    console.log('Loading document:', id);
+    const loadDocument = async () => {
+      try {
+        setIsLoading(true);
+        setError(null);
+        const document = await api.getDocument(id!);
+        setContent(document.content);
+      } catch (error) {
+        console.error('Failed to load document:', error);
+        setError('Failed to load document. It may not exist yet.');
+        // If document doesn't exist, we'll create it when user starts typing
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (id && id !== 'new-document') {
+      loadDocument();
+    } else {
+      setIsLoading(false);
+    }
   }, [id]);
 
   return (
@@ -73,13 +98,23 @@ export default function Editor({ onSave }: EditorProps) {
       
       <Card className="flex-1">
         <CardContent className="p-0">
-          <Textarea
-            className="min-h-[500px] border-0 resize-none text-base leading-relaxed font-mono focus-visible:ring-0 focus-visible:ring-offset-0"
-            value={content}
-            onChange={handleContentChange}
-            placeholder="Start typing your document..."
-            autoFocus
-          />
+          {isLoading ? (
+            <div className="flex items-center justify-center min-h-[500px]">
+              <div className="text-muted-foreground">Loading document...</div>
+            </div>
+          ) : error ? (
+            <div className="flex items-center justify-center min-h-[500px]">
+              <div className="text-destructive">{error}</div>
+            </div>
+          ) : (
+            <Textarea
+              className="min-h-[500px] border-0 resize-none text-base leading-relaxed font-mono focus-visible:ring-0 focus-visible:ring-offset-0"
+              value={content}
+              onChange={handleContentChange}
+              placeholder="Start typing your document..."
+              autoFocus
+            />
+          )}
         </CardContent>
       </Card>
     </div>
