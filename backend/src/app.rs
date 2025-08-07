@@ -1,5 +1,5 @@
 use axum::{
-    http::{HeaderValue, Method},
+    http::{HeaderValue, Method, HeaderName},
     routing::{get, post, put},
     Router,
 };
@@ -34,7 +34,13 @@ pub fn create_app(database: Database, config: &AppConfig) -> Router {
         .allow_methods(config.cors.allowed_methods.iter().map(|method| {
             method.parse::<Method>().unwrap_or(Method::GET)
         }).collect::<Vec<_>>())
-        .allow_headers(Any);
+        .allow_headers([
+            "content-type".parse::<HeaderName>().unwrap(),
+            "authorization".parse::<HeaderName>().unwrap(),
+            "accept".parse::<HeaderName>().unwrap(),
+            "origin".parse::<HeaderName>().unwrap(),
+            "x-requested-with".parse::<HeaderName>().unwrap(),
+        ]);
 
     // Create WebSocket manager
     let ws_manager = Arc::new(WebSocketManager::new());
@@ -69,7 +75,13 @@ pub fn create_test_app(database: Database) -> Router {
     let cors = CorsLayer::new()
         .allow_origin("http://localhost:5173".parse::<HeaderValue>().unwrap())
         .allow_methods([Method::GET, Method::POST, Method::PUT])
-        .allow_headers(Any);
+        .allow_headers([
+            "content-type".parse::<HeaderName>().unwrap(),
+            "authorization".parse::<HeaderName>().unwrap(),
+            "accept".parse::<HeaderName>().unwrap(),
+            "origin".parse::<HeaderName>().unwrap(),
+            "x-requested-with".parse::<HeaderName>().unwrap(),
+        ]);
 
     let ws_manager = Arc::new(WebSocketManager::new());
     let state = AppState {

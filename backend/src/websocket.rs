@@ -51,20 +51,53 @@ impl WebSocketManager {
         }
     }
 
+    /*
+    * This function is used to join a document room.
+    * It creates a new broadcast channel if the document room does not exist.
+    * It also sends a join message to all other users in the document room.
+    * It returns a receiver that can be used to receive messages from the document room.
+    * 
+    * Note that it used to have a deadlock issue, but it was fixed by using a write lock on the rooms HashMap.
+    * This is because tx.send() is a blocking operation, and it acquires a lock on the broadcast channel.
+    * The write lock is released after the join message is sent, which prevents the deadlock.
+    * 
+    * Why This Fixes the Deadlock:
+    *   Before (Deadlock):
+    *    1. Thread A acquires write lock
+    *    2. Thread A calls tx.send() (blocks if channel full)
+    *    3. Thread B tries to acquire write lock (waits for Thread A)
+    *    4. DEADLOCK! Thread A waiting for send, Thread B waiting for lock
+    *   After (No Deadlock):
+    *    1. Thread A acquires write lock
+    *    2. Thread A gets tx and releases lock immediately
+    *    3. Thread A calls tx.send() (no lock held)
+    *    4. Thread B can acquire lock normally
+    *    5. No deadlock!
+    *    The key insight is that tx.send() can block, so we must release the lock before calling it.
+    */
     pub async fn join_document(&self, document_id: String, user_id: String) -> broadcast::Receiver<WebSocketMessage> {
-        let mut rooms = self.document_rooms.write().await;
-        
-        let (tx, rx) = if let Some(tx) = rooms.get(&document_id) {
-            (tx.clone(), tx.subscribe())
-        } else {
-            let (tx, rx) = broadcast::channel(100);
-            rooms.insert(document_id.clone(), tx.clone());
-            (tx, rx)
-        };
+        // 1. Create a new scope with curly braces
+        let (tx, rx) = {
+            // 2. Acquire write lock on the rooms HashMap
+            let mut rooms = self.document_rooms.write().await;
+            
+            // 3. Check if this document already has a broadcast channel
+            if let Some(tx) = rooms.get(&document_id) {
+                // 4a. If it exists, clone the sender and create a new receiver
+                (tx.clone(), tx.subscribe())
+            } else {
+                // 4b. If it doesn't exist, create a new broadcast channel
+                let (tx, rx) = broadcast::channel(100);
+                // 5. Store the sender in the HashMap
+                rooms.insert(document_id.clone(), tx.clone());
+                (tx, rx)
+            }
+        }; // 6. Write lock is released here (end of scope)
 
-        // Notify other users that someone joined
+        // 7. Send the join message AFTER releasing the lock (prevents deadlock)
         let _ = tx.send(WebSocketMessage::UserJoined { user_id: user_id.clone() });
         
+        // 8. Return the receiver
         rx
     }
 
@@ -102,6 +135,7 @@ pub async fn websocket_handler(
     Path(document_id): Path<String>,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
+    info!("WebSocket upgrade request for document: {}", document_id);
     ws.on_upgrade(|socket| handle_socket(socket, document_id, state))
 }
 

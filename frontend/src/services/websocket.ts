@@ -44,14 +44,26 @@ export class WebSocketService {
     return new Promise((resolve, reject) => {
       try {
         const wsUrl = `ws://localhost:3000/ws/doc/${documentId}`;
+        console.log('Creating WebSocket connection to:', wsUrl);
         this.ws = new WebSocket(wsUrl);
         this.documentId = documentId;
 
+        // Add connection timeout
+        const connectionTimeout = setTimeout(() => {
+          if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+            console.error('WebSocket connection timeout');
+            this.ws.close();
+            reject(new Error('Connection timeout'));
+          }
+        }, 5000); // 5 second timeout
+
         this.ws.onopen = () => {
-          console.log('WebSocket connected for document:', documentId);
+          console.log('✅ WebSocket connected for document:', documentId);
+          clearTimeout(connectionTimeout); // Clear the timeout
           this.reconnectAttempts = 0;
           
           // Join the document
+          console.log('Sending JoinDocument message');
           this.send({
             JoinDocument: {
               document_id: documentId,
@@ -63,6 +75,7 @@ export class WebSocketService {
         };
 
         this.ws.onmessage = (event) => {
+          console.log('📨 Received WebSocket message:', event.data);
           try {
             const message: WebSocketMessage = JSON.parse(event.data);
             this.handleMessage(message);
@@ -71,16 +84,18 @@ export class WebSocketService {
           }
         };
 
-        this.ws.onclose = () => {
-          console.log('WebSocket disconnected');
+        this.ws.onclose = (event) => {
+          console.log('🔌 WebSocket disconnected:', event.code, event.reason);
           this.attemptReconnect();
         };
 
         this.ws.onerror = (error) => {
-          console.error('WebSocket error:', error);
+          console.error('❌ WebSocket error:', error);
+          clearTimeout(connectionTimeout); // Clear the timeout
           reject(error);
         };
       } catch (error) {
+        console.error('❌ Failed to create WebSocket:', error);
         reject(error);
       }
     });

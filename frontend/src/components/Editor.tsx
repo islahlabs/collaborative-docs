@@ -85,8 +85,13 @@ export default function Editor({ onSave }: EditorProps) {
     // Connect to WebSocket
     const connectWebSocket = async () => {
       try {
+        console.log('Attempting to connect WebSocket for document:', id);
+        console.log('WebSocket URL:', `ws://localhost:3000/ws/doc/${id}`);
+        
         await websocketService.connect(id);
+        console.log('✅ WebSocket connected successfully');
         setIsWebSocketConnected(true);
+        setError(null); // Clear any previous error state
         
         // Set up event listeners
         websocketService.on('documentState', (state) => {
@@ -115,7 +120,11 @@ export default function Editor({ onSave }: EditorProps) {
           setError(`WebSocket error: ${error}`);
         });
       } catch (error) {
-        console.error('Failed to connect WebSocket:', error);
+        console.error('❌ Failed to connect WebSocket:', error);
+        console.error('Error details:', {
+          message: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        });
         setError('Failed to connect to real-time collaboration');
       }
     };
@@ -124,6 +133,7 @@ export default function Editor({ onSave }: EditorProps) {
 
     // Cleanup on unmount
     return () => {
+      console.log('Disconnecting WebSocket');
       websocketService.disconnect();
       setIsWebSocketConnected(false);
       setActiveUsers([]);
