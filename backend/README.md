@@ -85,7 +85,7 @@ backend/
 
 4. **Start the server:**
    ```bash
-   cargo run
+   cargo run --bin collaborative-docs-rs
    ```
 
 ## Configuration

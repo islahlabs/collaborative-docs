@@ -31,6 +31,8 @@ export class WebSocketService {
   private listeners: Map<string, Set<(data: any) => void>> = new Map();
   private documentId: string | null = null;
   private userId: string;
+  private isConnecting: boolean = false;
+  private reconnectTimeout: number | null = null;
 
   constructor() {
     this.userId = this.generateUserId();
@@ -42,7 +44,23 @@ export class WebSocketService {
 
   connect(documentId: string): Promise<void> {
     return new Promise((resolve, reject) => {
+      // Prevent multiple simultaneous connection attempts
+      if (this.isConnecting) {
+        reject(new Error('Connection already in progress'));
+        return;
+      }
+
+      // If already connected to the same document, resolve immediately
+      if (this.isConnected() && this.documentId === documentId) {
+        resolve();
+        return;
+      }
+
+      // Clean up any existing connection
+      this.disconnect();
+
       try {
+        this.isConnecting = true;
         const wsUrl = `ws://localhost:3000/ws/doc/${documentId}`;
         console.log('Creating WebSocket connection to:', wsUrl);
         this.ws = new WebSocket(wsUrl);
@@ -53,6 +71,7 @@ export class WebSocketService {
           if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
             console.error('WebSocket connection timeout');
             this.ws.close();
+            this.isConnecting = false;
             reject(new Error('Connection timeout'));
           }
         }, 5000); // 5 second timeout
@@ -60,6 +79,7 @@ export class WebSocketService {
         this.ws.onopen = () => {
           console.log('✅ WebSocket connected for document:', documentId);
           clearTimeout(connectionTimeout); // Clear the timeout
+          this.isConnecting = false;
           this.reconnectAttempts = 0;
           
           // Join the document
@@ -86,30 +106,43 @@ export class WebSocketService {
 
         this.ws.onclose = (event) => {
           console.log('🔌 WebSocket disconnected:', event.code, event.reason);
+          this.isConnecting = false;
+          this.ws = null;
           this.attemptReconnect();
         };
 
         this.ws.onerror = (error) => {
           console.error('❌ WebSocket error:', error);
           clearTimeout(connectionTimeout); // Clear the timeout
+          this.isConnecting = false;
           reject(error);
         };
       } catch (error) {
         console.error('❌ Failed to create WebSocket:', error);
+        this.isConnecting = false;
         reject(error);
       }
     });
   }
 
   private attemptReconnect() {
-    if (this.reconnectAttempts < this.maxReconnectAttempts && this.documentId) {
-      this.reconnectAttempts++;
-      console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
-      
-      setTimeout(() => {
-        this.connect(this.documentId!).catch(console.error);
-      }, this.reconnectDelay * this.reconnectAttempts);
+    // Clear any existing reconnect timeout
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
     }
+
+    // Don't reconnect if already connecting or if max attempts reached
+    if (this.isConnecting || this.reconnectAttempts >= this.maxReconnectAttempts || !this.documentId) {
+      return;
+    }
+
+    this.reconnectAttempts++;
+    console.log(`Attempting to reconnect (${this.reconnectAttempts}/${this.maxReconnectAttempts})...`);
+    
+    this.reconnectTimeout = window.setTimeout(() => {
+      this.connect(this.documentId!).catch(console.error);
+    }, this.reconnectDelay * this.reconnectAttempts);
   }
 
   private handleMessage(message: WebSocketMessage) {
@@ -170,10 +203,21 @@ export class WebSocketService {
   }
 
   disconnect() {
+    // Clear reconnection timeout
+    if (this.reconnectTimeout) {
+      clearTimeout(this.reconnectTimeout);
+      this.reconnectTimeout = null;
+    }
+
+    // Close WebSocket connection
     if (this.ws) {
       this.ws.close();
       this.ws = null;
     }
+
+    // Reset connection state
+    this.isConnecting = false;
+    this.reconnectAttempts = 0;
     this.documentId = null;
     this.listeners.clear();
   }

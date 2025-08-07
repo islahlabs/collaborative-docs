@@ -75,7 +75,17 @@ impl WebSocketManager {
     *    5. No deadlock!
     *    The key insight is that tx.send() can block, so we must release the lock before calling it.
     */
-    pub async fn join_document(&self, document_id: String, user_id: String) -> broadcast::Receiver<WebSocketMessage> {
+    pub async fn join_document(&self, document_id: String, user_id: String, connection_id: String) -> broadcast::Receiver<WebSocketMessage> {
+        // Store the connection
+        {
+            let mut connections = self.connections.write().await;
+            connections.insert(connection_id.clone(), WebSocketConnection {
+                id: connection_id.clone(),
+                user_id: user_id.clone(),
+                document_id: document_id.clone(),
+            });
+        }
+
         // 1. Create a new scope with curly braces
         let (tx, rx) = {
             // 2. Acquire write lock on the rooms HashMap
@@ -101,11 +111,26 @@ impl WebSocketManager {
         rx
     }
 
-    pub async fn leave_document(&self, document_id: &str, user_id: &str) {
+    pub async fn leave_document(&self, document_id: &str, user_id: &str, connection_id: &str) {
+        // Remove the connection
+        {
+            let mut connections = self.connections.write().await;
+            connections.remove(connection_id);
+        }
+
         let rooms = self.document_rooms.read().await;
         if let Some(tx) = rooms.get(document_id) {
             let _ = tx.send(WebSocketMessage::UserLeft { user_id: user_id.to_string() });
         }
+    }
+
+    pub async fn get_active_users_count(&self, document_id: &str) -> usize {
+        let connections = self.connections.read().await;
+        connections.values()
+            .filter(|conn| conn.document_id == document_id)
+            .map(|conn| &conn.user_id)
+            .collect::<std::collections::HashSet<_>>()
+            .len()
     }
 
     pub async fn broadcast_update(&self, document_id: &str, update: DocumentUpdate) {
@@ -142,12 +167,13 @@ pub async fn websocket_handler(
 async fn handle_socket(socket: WebSocket, document_id: String, state: AppState) {
     let (mut sender, mut receiver) = socket.split();
     
-    // Generate a unique user ID for this connection
+    // Generate unique IDs for this connection
     let user_id = Uuid::new_v4().to_string();
-    info!("WebSocket connection established for document {} by user {}", document_id, user_id);
+    let connection_id = Uuid::new_v4().to_string();
+    info!("WebSocket connection established for document {} by user {} with connection {}", document_id, user_id, connection_id);
 
     // Join the document room
-    let mut rx = state.ws_manager.join_document(document_id.clone(), user_id.clone()).await;
+    let mut rx = state.ws_manager.join_document(document_id.clone(), user_id.clone(), connection_id.clone()).await;
 
     // Handle incoming messages
     let mut recv_task = tokio::spawn(async move {
@@ -189,19 +215,22 @@ async fn handle_socket(socket: WebSocket, document_id: String, state: AppState) 
     }
 
     // Leave the document room
-    state.ws_manager.leave_document(&document_id, &user_id).await;
-    info!("WebSocket connection closed for document {} by user {}", document_id, user_id);
+    state.ws_manager.leave_document(&document_id, &user_id, &connection_id).await;
+    info!("WebSocket connection closed for document {} by user {} with connection {}", document_id, user_id, connection_id);
 }
 
 // HTTP endpoint that returns WebSocket info (for debugging)
 pub async fn websocket_info_handler(
     Path(document_id): Path<String>,
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
 ) -> axum::Json<serde_json::Value> {
+    let active_users_count = state.ws_manager.get_active_users_count(&document_id).await;
+    
     axum::Json(serde_json::json!({
         "message": "WebSocket endpoint",
         "document_id": document_id,
         "endpoint": format!("/ws/doc/{}", document_id),
-        "protocol": "ws:// or wss://"
+        "protocol": "ws:// or wss://",
+        "active_users_count": active_users_count
     }))
 } 
