@@ -1,4 +1,5 @@
 use axum::http::HeaderMap;
+use axum::extract::Request;
 use tracing::{debug, info, warn};
 
 /// Extract client IP address from headers only (without ConnectInfo)
@@ -91,6 +92,36 @@ pub fn extract_client_ip_from_headers(headers: &HeaderMap) -> String {
     
     // Fall back to localhost for local development
     debug!("No proxy headers found, falling back to localhost");
+    info!("Using fallback IP: 127.0.0.1");
+    "127.0.0.1".to_string()
+}
+
+/// Extract client IP address from request object and headers
+pub fn extract_client_ip_from_request(request: &Request, headers: &HeaderMap) -> String {
+    debug!("Starting IP extraction from request");
+    
+    // First check for proxy headers (highest priority)
+    let proxy_ip = extract_client_ip_from_headers(headers);
+    if proxy_ip != "127.0.0.1" {
+        return proxy_ip;
+    }
+    
+    // Try to get IP from request extensions (if available)
+    if let Some(addr) = request.extensions().get::<std::net::SocketAddr>() {
+        debug!("Found SocketAddr in request extensions: {}", addr);
+        info!("Using IP from request extensions: {}", addr.ip());
+        return addr.ip().to_string();
+    }
+    
+    // Try to get IP from connection info
+    if let Some(addr) = request.extensions().get::<axum::extract::connect_info::ConnectInfo<std::net::SocketAddr>>() {
+        debug!("Found ConnectInfo in request extensions: {:?}", addr);
+        info!("Using IP from ConnectInfo: {}", addr.ip());
+        return addr.ip().to_string();
+    }
+    
+    // Fall back to localhost
+    debug!("No IP information found in request, using localhost");
     info!("Using fallback IP: 127.0.0.1");
     "127.0.0.1".to_string()
 } 
