@@ -40,7 +40,7 @@ print_error() {
 # Create service user and group
 print_status "Creating service user and group..."
 if ! id "$SERVICE_USER" &>/dev/null; then
-    useradd --system --shell /bin/false --home-dir /path/to/collaborative-docs "$SERVICE_USER"
+    useradd --system --shell /bin/false --home-dir "$INSTALL_DIR" "$SERVICE_USER"
     print_status "Created user: $SERVICE_USER"
 else
     print_warning "User $SERVICE_USER already exists"
