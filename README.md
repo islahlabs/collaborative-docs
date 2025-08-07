@@ -1,93 +1,330 @@
-# Integration Tests
+# Collaborative Docs
 
-This directory contains comprehensive integration tests for the collaborative docs WebSocket CRDT functionality.
+A real-time collaborative document editing platform built with modern web technologies (Rust backend, React + TypeScript frontend). Features live collaboration, version history, and a beautiful user interface.
 
-## Setup
+![Collaborative Docs Screenshot](https://via.placeholder.com/800x400/2563eb/ffffff?text=Collaborative+Docs)
 
-1. **Install dependencies:**
+## 🚀 Features
+
+- **Real-time Collaboration** - Live editing with WebSocket-based synchronization
+- **Version History** - Complete document history with timestamps and user tracking
+- **Beautiful UI** - Modern React interface with Tailwind CSS
+- **User Authentication** - Secure login and registration system
+- **Document Search** - Full-text search across all documents
+- **Responsive Design** - Works on desktop and mobile devices
+- **Production Ready** - Docker support, comprehensive testing, and monitoring
+
+## 🏗️ Architecture
+
+This project follows a modern microservices architecture:
+
+```
+collaborative-docs/
+├── backend/          # Rust API server (Axum + PostgreSQL)
+├── frontend/         # React + TypeScript + Vite
+└── integration/      # End-to-end integration tests
+```
+
+### Tech Stack
+
+**Backend:**
+- **Rust** with Axum web framework
+- **PostgreSQL** for data persistence
+- **WebSocket** for real-time communication
+- **JWT** for authentication
+- **Docker** for containerization
+
+**Frontend:**
+- **React 19** with TypeScript
+- **Vite** for fast development
+- **Tailwind CSS** for styling
+- **Radix UI** for accessible components
+- **React Router** for navigation
+
+**Testing:**
+- **Jest** for integration tests
+- **Vitest** for unit tests
+- **Testing Library** for component testing
+
+## 🛠️ Quick Start
+
+### Prerequisites
+
+- **Rust** (latest stable)
+- **Node.js** (18+) and **pnpm**
+- **PostgreSQL** (13+)
+- **Docker** (optional, for containerized setup)
+
+### Option 1: Docker Setup (Recommended)
+
+1. **Clone the repository:**
    ```bash
+   git clone https://github.com/yourusername/collaborative-docs.git
+   cd collaborative-docs
+   ```
+
+2. **Start all services:**
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Access the application:**
+   - Frontend: http://localhost:5173
+   - Backend API: http://localhost:3000
+
+### Option 2: Manual Setup
+
+1. **Start the backend:**
+   ```bash
+   cd backend
+   cargo run --bin collaborative-docs-rs
+   ```
+
+2. **Start the frontend:**
+   ```bash
+   cd frontend
    pnpm install
+   pnpm dev
    ```
 
-2. **Ensure backend is running:**
+3. **Run integration tests (optional):**
    ```bash
-   cd ../backend
-   cargo run
+   cd integration
+   pnpm install
+   pnpm test
    ```
 
-3. **Ensure frontend is running (optional):**
-   ```bash
-   cd ../frontend
-   pnpm run dev
-   ```
+## 📁 Project Structure
 
-## Running Tests
+```
+collaborative-docs/
+├── backend/                    # Rust API server
+│   ├── src/
+│   │   ├── main.rs           # Application entry point
+│   │   ├── app.rs            # Router and middleware
+│   │   ├── handlers.rs       # API endpoints
+│   │   ├── database.rs       # Database operations
+│   │   ├── models.rs         # Data structures
+│   │   ├── config.rs         # Configuration
+│   │   ├── auth.rs           # Authentication
+│   │   ├── websocket.rs      # Real-time communication
+│   │   └── crdt.rs           # Conflict resolution
+│   ├── migrations/           # Database migrations
+│   ├── config/              # Configuration files
+│   └── tests/               # Backend tests
+├── frontend/                  # React application
+│   ├── src/
+│   │   ├── components/       # React components
+│   │   ├── pages/           # Page components
+│   │   ├── services/        # API and WebSocket services
+│   │   ├── contexts/        # React contexts
+│   │   └── lib/             # Utility functions
+│   └── public/              # Static assets
+├── integration/               # End-to-end tests
+│   ├── src/
+│   │   ├── websocket-crdt.test.ts
+│   │   └── websocket-deadlock.test.ts
+│   └── jest.config.js
+└── docker-compose.yml        # Docker orchestration
+```
 
-### All Tests
+## 🔧 Configuration
+
+### Environment Variables
+
+Create a `.env` file in the root directory:
+
 ```bash
+# Database
+DATABASE_URL=postgresql://username:password@localhost:5432/collaborative_docs
+
+# Server
+RUST_LOG=info
+RUN_MODE=development
+
+# Frontend
+VITE_API_URL=http://localhost:3000
+```
+
+### Backend Configuration
+
+The backend uses TOML configuration files in `backend/config/`:
+
+- `default.toml` - Base configuration
+- `development.toml` - Development overrides
+- `production.toml` - Production overrides
+
+## 🧪 Testing
+
+### Backend Tests
+```bash
+cd backend
+cargo test
+```
+
+### Frontend Tests
+```bash
+cd frontend
 pnpm test
 ```
 
-### Watch Mode
+### Integration Tests
 ```bash
-pnpm test:watch
+cd integration
+pnpm test
 ```
 
-### Specific Test Categories
+### All Tests
 ```bash
-# WebSocket tests only
-pnpm test:websocket
-
-# CRDT tests only
-pnpm test:crdt
+# From project root
+pnpm test:all
 ```
 
-## Test Structure
+## 🚀 Deployment
 
-### `websocket-crdt.test.ts`
-Comprehensive integration tests covering:
+### Production with Docker
 
-- **Backend API Endpoints**: Document CRUD operations
-- **WebSocket Connection**: Connection establishment and error handling
-- **WebSocket Message Exchange**: Real-time message sending/receiving
-- **CRDT Functionality**: Concurrent updates and state consistency
-- **Error Handling**: Malformed messages and disconnection scenarios
+1. **Build and deploy:**
+   ```bash
+   docker-compose -f docker-compose.prod.yml up -d
+   ```
 
-## Test Features
+2. **Environment variables for production:**
+   ```bash
+   RUN_MODE=production
+   RUST_LOG=warn
+   DATABASE_URL=postgresql://user:pass@host:5432/db
+   ```
 
-- **TypeScript**: Full type safety with interfaces matching backend
-- **WebSocket Testing**: Real WebSocket connections using `ws` library
-- **HTTP Testing**: API endpoint testing using `node-fetch`
-- **Concurrent Testing**: Multiple client simulation
-- **Error Scenarios**: Comprehensive error handling tests
-- **Jest Framework**: Industry-standard testing with proper setup/teardown
+### Manual Deployment
 
-## Best Practices Followed
+1. **Backend:**
+   ```bash
+   cd backend
+   cargo build --release
+   ./target/release/collaborative-docs-rs
+   ```
 
-1. **Location**: Project root in dedicated `integration/` folder
-2. **Language**: TypeScript for type safety and consistency
-3. **Framework**: Jest with proper configuration
-4. **Structure**: Separate from unit tests and frontend/backend tests
-5. **Configuration**: Proper test configuration and environment setup
-6. **Dependencies**: Managed with `pnpm` for consistency
+2. **Frontend:**
+   ```bash
+   cd frontend
+   pnpm build
+   # Serve the dist/ directory with your web server
+   ```
 
-## Test Environment
+## 📊 API Documentation
 
-- **Backend**: `http://localhost:3000`
-- **WebSocket**: `ws://localhost:3000/ws/doc/{document_id}`
-- **Frontend**: `http://localhost:5173` (optional for full integration)
+### Authentication Endpoints
 
-## Adding New Tests
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/auth/signup` | Register a new user |
+| `POST` | `/api/auth/login` | Authenticate user |
 
-1. Create new test files in `src/` with `.test.ts` extension
-2. Follow the existing pattern with `describe` and `test` blocks
-3. Use the `IntegrationTestClient` class for WebSocket testing
-4. Add proper setup/teardown in `beforeAll`/`afterAll` hooks
-5. Use descriptive test names and proper assertions
+### Document Endpoints
 
-## Troubleshooting
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/api/doc` | Create a new document |
+| `GET` | `/api/doc/{id}` | Get document by ID |
+| `PUT` | `/api/doc/{id}` | Update document content |
+| `GET` | `/api/doc/{id}/history` | Get document version history |
+| `GET` | `/api/doc/{id}/stats` | Get document statistics |
+| `GET` | `/api/search?q=query` | Search documents |
 
-- **Connection Errors**: Ensure backend is running on port 3000
-- **Type Errors**: Check that interfaces match backend types
-- **Timeout Errors**: Increase timeout in `jest.config.js` if needed
-- **WebSocket Errors**: Verify WebSocket endpoint is accessible
+### WebSocket Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `ws://localhost:3000/ws/doc/{id}` | Real-time document collaboration |
+| `GET /ws/info/{id}` | Get WebSocket connection info |
+
+## 🔒 Security Features
+
+- **JWT Authentication** - Secure token-based authentication
+- **Input Validation** - Comprehensive request validation
+- **CORS Protection** - Configurable cross-origin policies
+- **SQL Injection Prevention** - Parameterized queries
+- **Rate Limiting** - Protection against abuse
+
+## 🐛 Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Errors:**
+   ```bash
+   # Check PostgreSQL is running
+   brew services list | grep postgresql
+   
+   # Create database if needed
+   createdb collaborative_docs
+   ```
+
+2. **WebSocket Connection Issues:**
+   ```bash
+   # Check backend is running
+   curl http://localhost:3000/api/doc
+   
+   # Check WebSocket endpoint
+   curl http://localhost:3000/ws/info/test-doc
+   ```
+
+3. **Frontend Build Errors:**
+   ```bash
+   # Clear node modules and reinstall
+   cd frontend
+   rm -rf node_modules pnpm-lock.yaml
+   pnpm install
+   ```
+
+### Debug Mode
+
+Enable debug logging:
+
+```bash
+# Backend
+RUST_LOG=debug cargo run
+
+# Frontend
+pnpm dev --debug
+```
+
+## 🤝 Contributing
+
+1. **Fork the repository**
+2. **Create a feature branch** (`git checkout -b feature/amazing-feature`)
+3. **Make your changes** following the existing code style
+4. **Add tests** for new functionality
+5. **Run all tests** to ensure nothing breaks
+6. **Commit your changes** (`git commit -m 'Add amazing feature'`)
+7. **Push to the branch** (`git push origin feature/amazing-feature`)
+8. **Open a Pull Request**
+
+### Development Guidelines
+
+- **Rust**: Follow Rust best practices and use `cargo fmt` and `cargo clippy`
+- **TypeScript**: Use strict TypeScript configuration and ESLint
+- **Testing**: Maintain high test coverage for all new features
+- **Documentation**: Update README files for any new features
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- **Axum** - Modern Rust web framework
+- **React** - UI library
+- **Tailwind CSS** - Utility-first CSS framework
+- **PostgreSQL** - Reliable database
+- **WebSocket** - Real-time communication protocol
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/yourusername/collaborative-docs/issues)
+- **Discussions**: [GitHub Discussions](https://github.com/yourusername/collaborative-docs/discussions)
+- **Email**: riyad@islahlabs.com
+
+---
+
+**Made with ❤️ by the Collaborative Docs team** 
