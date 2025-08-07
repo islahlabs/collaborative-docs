@@ -3,8 +3,9 @@ import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Save, Clock, History, User } from 'lucide-react';
+import { Save, Clock, History, User, Wifi, WifiOff } from 'lucide-react';
 import { api } from '@/services/api';
+import { websocketService } from '@/services/websocket';
 import type { DocumentHistory } from '@/services/api';
 
 interface EditorProps {
@@ -19,6 +20,8 @@ export default function Editor({ onSave }: EditorProps) {
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   const [history, setHistory] = useState<DocumentHistory[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
+  const [activeUsers, setActiveUsers] = useState<string[]>([]);
   const { id } = useParams<{ id: string }>();
 
   // Load document history
@@ -65,8 +68,67 @@ export default function Editor({ onSave }: EditorProps) {
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const newContent = e.target.value;
     setContent(newContent);
+    
+    // Send update via WebSocket for real-time collaboration
+    if (isWebSocketConnected) {
+      websocketService.updateDocument(newContent);
+    }
+    
+    // Also save to database (debounced)
     debouncedSave(newContent);
   };
+
+  // WebSocket integration
+  useEffect(() => {
+    if (!id || id === 'new-document') return;
+
+    // Connect to WebSocket
+    const connectWebSocket = async () => {
+      try {
+        await websocketService.connect(id);
+        setIsWebSocketConnected(true);
+        
+        // Set up event listeners
+        websocketService.on('documentState', (state) => {
+          console.log('Received document state:', state);
+          setContent(state.content);
+        });
+
+        websocketService.on('documentUpdated', (update) => {
+          console.log('Document updated by another user:', update);
+          setContent(update.content);
+          setLastSaved(new Date());
+        });
+
+        websocketService.on('userJoined', (userId) => {
+          console.log('User joined:', userId);
+          setActiveUsers(prev => [...prev, userId]);
+        });
+
+        websocketService.on('userLeft', (userId) => {
+          console.log('User left:', userId);
+          setActiveUsers(prev => prev.filter(id => id !== userId));
+        });
+
+        websocketService.on('error', (error) => {
+          console.error('WebSocket error:', error);
+          setError(`WebSocket error: ${error}`);
+        });
+      } catch (error) {
+        console.error('Failed to connect WebSocket:', error);
+        setError('Failed to connect to real-time collaboration');
+      }
+    };
+
+    connectWebSocket();
+
+    // Cleanup on unmount
+    return () => {
+      websocketService.disconnect();
+      setIsWebSocketConnected(false);
+      setActiveUsers([]);
+    };
+  }, [id]);
 
   // Load document content and history on mount
   useEffect(() => {
@@ -128,6 +190,32 @@ export default function Editor({ onSave }: EditorProps) {
           <div className="flex justify-between items-center">
             <CardTitle className="text-2xl">Document: {id}</CardTitle>
             <div className="flex items-center gap-3">
+              {/* WebSocket Status */}
+              <Badge 
+                variant={isWebSocketConnected ? "default" : "secondary"} 
+                className="flex items-center gap-1"
+              >
+                {isWebSocketConnected ? (
+                  <>
+                    <Wifi className="h-3 w-3" />
+                    Live
+                  </>
+                ) : (
+                  <>
+                    <WifiOff className="h-3 w-3" />
+                    Offline
+                  </>
+                )}
+              </Badge>
+              
+              {/* Active Users */}
+              {activeUsers.length > 0 && (
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <User className="h-3 w-3" />
+                  {activeUsers.length} active
+                </Badge>
+              )}
+              
               {isSaving && (
                 <Badge variant="secondary" className="flex items-center gap-1">
                   <Save className="h-3 w-3" />

@@ -7,8 +7,8 @@ use crate::crdt::{DocumentManager, DocumentUpdate};
 
 #[derive(Clone)]
 pub struct Database {
-    pool: PgPool,
-    crdt_manager: Arc<RwLock<DocumentManager>>,
+    pub pool: PgPool,
+    pub crdt_manager: Arc<RwLock<DocumentManager>>,
 }
 
 impl Database {

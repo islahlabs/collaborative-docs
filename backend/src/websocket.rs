@@ -2,11 +2,11 @@ use axum::{
     extract::{Path, State},
     response::IntoResponse,
 };
+use axum_tws::{WebSocket, WebSocketUpgrade};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
-use tokio_tungstenite::{tungstenite::Message, WebSocketStream};
 use tracing::{info, warn, error};
 use uuid::Uuid;
 use futures_util::{SinkExt, StreamExt};
@@ -96,10 +96,73 @@ impl Default for WebSocketManager {
     }
 }
 
-// For now, let's create a simple HTTP endpoint that returns WebSocket info
-pub async fn websocket_info_handler(
+// WebSocket handler for real-time CRDT collaboration
+pub async fn websocket_handler(
+    ws: WebSocketUpgrade,
     Path(document_id): Path<String>,
     State(state): State<AppState>,
+) -> impl IntoResponse {
+    ws.on_upgrade(|socket| handle_socket(socket, document_id, state))
+}
+
+async fn handle_socket(socket: WebSocket, document_id: String, state: AppState) {
+    let (mut sender, mut receiver) = socket.split();
+    
+    // Generate a unique user ID for this connection
+    let user_id = Uuid::new_v4().to_string();
+    info!("WebSocket connection established for document {} by user {}", document_id, user_id);
+
+    // Join the document room
+    let mut rx = state.ws_manager.join_document(document_id.clone(), user_id.clone()).await;
+
+    // Handle incoming messages
+    let mut recv_task = tokio::spawn(async move {
+        while let Some(msg) = receiver.next().await {
+            match msg {
+                Ok(msg) => {
+                    if msg.is_text() {
+                        // For now, just log the message
+                        info!("Received WebSocket message: {:?}", msg);
+                    }
+                }
+                Err(e) => {
+                    error!("WebSocket error: {}", e);
+                    break;
+                }
+            }
+        }
+    });
+
+    // Handle outgoing messages
+    let mut send_task = tokio::spawn(async move {
+        while let Ok(msg) = rx.recv().await {
+            let text = serde_json::to_string(&msg).unwrap();
+            if let Err(e) = sender.send(axum_tws::Message::text(text)).await {
+                error!("Failed to send WebSocket message: {}", e);
+                break;
+            }
+        }
+    });
+
+    // Wait for either task to complete
+    tokio::select! {
+        _ = (&mut recv_task) => {
+            send_task.abort();
+        }
+        _ = (&mut send_task) => {
+            recv_task.abort();
+        }
+    }
+
+    // Leave the document room
+    state.ws_manager.leave_document(&document_id, &user_id).await;
+    info!("WebSocket connection closed for document {} by user {}", document_id, user_id);
+}
+
+// HTTP endpoint that returns WebSocket info (for debugging)
+pub async fn websocket_info_handler(
+    Path(document_id): Path<String>,
+    State(_state): State<AppState>,
 ) -> axum::Json<serde_json::Value> {
     axum::Json(serde_json::json!({
         "message": "WebSocket endpoint",

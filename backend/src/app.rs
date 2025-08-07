@@ -13,7 +13,7 @@ use crate::{
         create_document, get_document, get_document_history, get_document_stats,
         search_documents, update_document, get_document_crdt_state, apply_crdt_update,
     },
-    websocket::{websocket_info_handler, WebSocketManager},
+    websocket::{websocket_handler, websocket_info_handler, WebSocketManager},
 };
 
 #[derive(Clone)]
@@ -56,8 +56,9 @@ pub fn create_app(database: Database, config: &AppConfig) -> Router {
         // CRDT routes for real-time collaboration
         .route("/api/doc/{id}/crdt/state", get(get_document_crdt_state))
         .route("/api/doc/{id}/crdt/update", post(apply_crdt_update))
-        // WebSocket info route
-        .route("/ws/doc/{document_id}", get(websocket_info_handler))
+        // WebSocket routes
+        .route("/ws/doc/{document_id}", get(websocket_handler))
+        .route("/ws/info/{document_id}", get(websocket_info_handler))
         .layer(cors)
         .with_state(state)
 }

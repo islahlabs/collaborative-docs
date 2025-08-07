@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tower_http::cors::{Any, CorsLayer};
 use uuid::Uuid;
+use tokio::sync::broadcast;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 struct Document {
@@ -35,6 +36,69 @@ struct CreateDocumentResponse {
 #[derive(Debug, Serialize, Deserialize)]
 struct UpdateDocumentRequest {
     content: String,
+}
+
+// WebSocket message types for CRDT testing
+#[derive(Debug, Serialize, Deserialize, Clone)]
+enum WebSocketMessage {
+    JoinDocument { document_id: String, user_id: String },
+    UpdateDocument { content: String, user_id: String },
+    DocumentState { state: DocumentState },
+    UserJoined { user_id: String },
+    UserLeft { user_id: String },
+    DocumentUpdated { update: DocumentUpdate },
+    Error { message: String },
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct DocumentUpdate {
+    content: String,
+    user_id: String,
+    timestamp: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+struct DocumentState {
+    content: String,
+    version: u64,
+    last_modified: i64,
+}
+
+// CRDT document for testing
+#[derive(Debug, Clone)]
+struct CRDTDocument {
+    id: String,
+    content: String,
+    version: u64,
+}
+
+impl CRDTDocument {
+    fn new(id: String) -> Self {
+        Self {
+            id,
+            content: String::new(),
+            version: 0,
+        }
+    }
+
+    fn update_content(&mut self, new_content: &str, user_id: &str) -> DocumentUpdate {
+        self.content = new_content.to_string();
+        self.version += 1;
+        
+        DocumentUpdate {
+            content: new_content.to_string(),
+            user_id: user_id.to_string(),
+            timestamp: chrono::Utc::now().timestamp(),
+        }
+    }
+
+    fn get_state(&self) -> DocumentState {
+        DocumentState {
+            content: self.content.clone(),
+            version: self.version,
+            last_modified: chrono::Utc::now().timestamp(),
+        }
+    }
 }
 
 type AppState = Arc<RwLock<HashMap<String, (Document, Vec<DocumentHistory>)>>>;
@@ -292,4 +356,231 @@ async fn test_concurrent_access() {
     
     let history: Vec<DocumentHistory> = history_response.json();
     assert_eq!(history.len(), 6); // Initial + 5 updates
+}
+
+// WebSocket CRDT Tests
+#[tokio::test]
+async fn test_crdt_document_creation() {
+    let mut doc = CRDTDocument::new("test-doc-123".to_string());
+    
+    // Test initial state
+    let state = doc.get_state();
+    assert_eq!(state.content, "");
+    assert_eq!(state.version, 0);
+    
+    // Test first update
+    let update1 = doc.update_content("Hello from user1", "user1");
+    assert_eq!(update1.content, "Hello from user1");
+    assert_eq!(update1.user_id, "user1");
+    assert_eq!(doc.version, 1);
+    
+    // Test second update
+    let update2 = doc.update_content("Hello from user2! This is collaborative editing.", "user2");
+    assert_eq!(update2.content, "Hello from user2! This is collaborative editing.");
+    assert_eq!(update2.user_id, "user2");
+    assert_eq!(doc.version, 2);
+    
+    // Verify final state
+    let final_state = doc.get_state();
+    assert_eq!(final_state.content, "Hello from user2! This is collaborative editing.");
+    assert_eq!(final_state.version, 2);
+}
+
+#[tokio::test]
+async fn test_websocket_message_serialization() {
+    // Test JoinDocument message
+    let join_msg = WebSocketMessage::JoinDocument {
+        document_id: "doc-123".to_string(),
+        user_id: "user-456".to_string(),
+    };
+    
+    let serialized = serde_json::to_string(&join_msg).unwrap();
+    let deserialized: WebSocketMessage = serde_json::from_str(&serialized).unwrap();
+    
+    match deserialized {
+        WebSocketMessage::JoinDocument { document_id, user_id } => {
+            assert_eq!(document_id, "doc-123");
+            assert_eq!(user_id, "user-456");
+        }
+        _ => panic!("Expected JoinDocument message"),
+    }
+    
+    // Test UpdateDocument message
+    let update_msg = WebSocketMessage::UpdateDocument {
+        content: "Test content".to_string(),
+        user_id: "user-789".to_string(),
+    };
+    
+    let serialized = serde_json::to_string(&update_msg).unwrap();
+    let deserialized: WebSocketMessage = serde_json::from_str(&serialized).unwrap();
+    
+    match deserialized {
+        WebSocketMessage::UpdateDocument { content, user_id } => {
+            assert_eq!(content, "Test content");
+            assert_eq!(user_id, "user-789");
+        }
+        _ => panic!("Expected UpdateDocument message"),
+    }
+}
+
+#[tokio::test]
+async fn test_crdt_conflict_resolution() {
+    let mut doc = CRDTDocument::new("conflict-test".to_string());
+    
+    // Simulate concurrent updates from different users
+    let updates = vec![
+        ("user1", "First user's content"),
+        ("user2", "Second user's content"),
+        ("user3", "Third user's content"),
+    ];
+    
+    for (user_id, content) in updates {
+        let update = doc.update_content(content, user_id);
+        println!("User {} updated document: {}", user_id, update.content);
+        println!("Version: {}, Timestamp: {}", update.timestamp, update.timestamp);
+    }
+    
+    // Verify final state (last-write-wins in our simple implementation)
+    let final_state = doc.get_state();
+    assert_eq!(final_state.content, "Third user's content");
+    assert_eq!(final_state.version, 3);
+}
+
+#[tokio::test]
+async fn test_websocket_broadcast_simulation() {
+    // Simulate WebSocket broadcast channel
+    let (tx, mut rx) = broadcast::channel::<WebSocketMessage>(100);
+    
+    // Create a document and simulate multiple users
+    let mut doc = CRDTDocument::new("broadcast-test".to_string());
+    
+    // Simulate user1 joining
+    let join_msg = WebSocketMessage::UserJoined {
+        user_id: "user1".to_string(),
+    };
+    tx.send(join_msg.clone()).unwrap();
+    
+    // Simulate user1 updating
+    let update = doc.update_content("Hello from user1", "user1");
+    let update_msg = WebSocketMessage::DocumentUpdated { update };
+    tx.send(update_msg.clone()).unwrap();
+    
+    // Simulate user2 joining
+    let join_msg2 = WebSocketMessage::UserJoined {
+        user_id: "user2".to_string(),
+    };
+    tx.send(join_msg2.clone()).unwrap();
+    
+    // Simulate user2 updating
+    let update2 = doc.update_content("Hello from user2!", "user2");
+    let update_msg2 = WebSocketMessage::DocumentUpdated { update: update2 };
+    tx.send(update_msg2.clone()).unwrap();
+    
+    // Verify we received all messages
+    let mut received_messages = Vec::new();
+    while let Ok(msg) = rx.try_recv() {
+        received_messages.push(msg);
+    }
+    
+    assert_eq!(received_messages.len(), 4);
+    
+    // Verify message types
+    match &received_messages[0] {
+        WebSocketMessage::UserJoined { user_id } => assert_eq!(user_id, "user1"),
+        _ => panic!("Expected UserJoined message"),
+    }
+    
+    match &received_messages[1] {
+        WebSocketMessage::DocumentUpdated { update } => {
+            assert_eq!(update.user_id, "user1");
+            assert_eq!(update.content, "Hello from user1");
+        }
+        _ => panic!("Expected DocumentUpdated message"),
+    }
+    
+    match &received_messages[2] {
+        WebSocketMessage::UserJoined { user_id } => assert_eq!(user_id, "user2"),
+        _ => panic!("Expected UserJoined message"),
+    }
+    
+    match &received_messages[3] {
+        WebSocketMessage::DocumentUpdated { update } => {
+            assert_eq!(update.user_id, "user2");
+            assert_eq!(update.content, "Hello from user2!");
+        }
+        _ => panic!("Expected DocumentUpdated message"),
+    }
+}
+
+#[tokio::test]
+async fn test_crdt_version_tracking() {
+    let mut doc = CRDTDocument::new("version-test".to_string());
+    
+    // Track versions through updates
+    let mut versions = Vec::new();
+    
+    for i in 1..=5 {
+        let content = format!("Update {}", i);
+        let update = doc.update_content(&content, &format!("user{}", i));
+        versions.push((doc.version, update.content.clone()));
+    }
+    
+    // Verify version progression
+    for (i, (version, content)) in versions.iter().enumerate() {
+        assert_eq!(*version, i as u64 + 1);
+        assert_eq!(*content, format!("Update {}", i + 1));
+    }
+    
+    // Verify final document state
+    let final_state = doc.get_state();
+    assert_eq!(final_state.version, 5);
+    assert_eq!(final_state.content, "Update 5");
+}
+
+#[tokio::test]
+async fn test_websocket_message_types() {
+    // Test all WebSocket message types
+    let messages = vec![
+        WebSocketMessage::JoinDocument {
+            document_id: "doc1".to_string(),
+            user_id: "user1".to_string(),
+        },
+        WebSocketMessage::UpdateDocument {
+            content: "test content".to_string(),
+            user_id: "user1".to_string(),
+        },
+        WebSocketMessage::DocumentState {
+            state: DocumentState {
+                content: "current content".to_string(),
+                version: 1,
+                last_modified: 1234567890,
+            },
+        },
+        WebSocketMessage::UserJoined {
+            user_id: "user2".to_string(),
+        },
+        WebSocketMessage::UserLeft {
+            user_id: "user1".to_string(),
+        },
+        WebSocketMessage::DocumentUpdated {
+            update: DocumentUpdate {
+                content: "updated content".to_string(),
+                user_id: "user2".to_string(),
+                timestamp: 1234567890,
+            },
+        },
+        WebSocketMessage::Error {
+            message: "test error".to_string(),
+        },
+    ];
+    
+    // Test serialization/deserialization for all message types
+    for msg in messages {
+        let serialized = serde_json::to_string(&msg).unwrap();
+        let deserialized: WebSocketMessage = serde_json::from_str(&serialized).unwrap();
+        
+        // Verify the message round-trips correctly
+        let reserialized = serde_json::to_string(&deserialized).unwrap();
+        assert_eq!(serialized, reserialized);
+    }
 } 
