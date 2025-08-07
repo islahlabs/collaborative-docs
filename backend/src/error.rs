@@ -25,6 +25,18 @@ pub enum AppError {
     
     #[error("Rate limit exceeded")]
     RateLimitExceeded,
+    
+    #[error("Authentication error: {0}")]
+    AuthenticationError(String),
+    
+    #[error("Authorization error: {0}")]
+    AuthorizationError(String),
+    
+    #[error("User not found: {0}")]
+    UserNotFound(String),
+    
+    #[error("User already exists: {0}")]
+    UserAlreadyExists(String),
 }
 
 impl IntoResponse for AppError {
@@ -50,6 +62,18 @@ impl IntoResponse for AppError {
             }
             AppError::RateLimitExceeded => {
                 (StatusCode::TOO_MANY_REQUESTS, "Rate limit exceeded".to_string())
+            }
+            AppError::AuthenticationError(msg) => {
+                (StatusCode::UNAUTHORIZED, format!("Authentication error: {}", msg))
+            }
+            AppError::AuthorizationError(msg) => {
+                (StatusCode::FORBIDDEN, format!("Authorization error: {}", msg))
+            }
+            AppError::UserNotFound(email) => {
+                (StatusCode::NOT_FOUND, format!("User not found: {}", email))
+            }
+            AppError::UserAlreadyExists(email) => {
+                (StatusCode::CONFLICT, format!("User already exists: {}", email))
             }
         };
 

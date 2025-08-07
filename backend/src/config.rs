@@ -18,14 +18,26 @@ pub struct ServerConfig {
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct DatabaseConfig {
-    pub host: String,
-    pub port: u16,
-    pub username: String,
-    pub password: String,
-    pub database: String,
+    #[serde(default)]
+    pub url: Option<String>,
+    #[serde(default)]
+    pub host: Option<String>,
+    #[serde(default)]
+    pub port: Option<u16>,
+    #[serde(default)]
+    pub username: Option<String>,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub database: Option<String>,
+    #[serde(default = "default_max_connections")]
     pub max_connections: u32,
+    #[serde(default = "default_min_connections")]
     pub min_connections: u32,
 }
+
+fn default_max_connections() -> u32 { 10 }
+fn default_min_connections() -> u32 { 2 }
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct CorsConfig {
@@ -41,11 +53,12 @@ impl Default for AppConfig {
                 port: 3000,
             },
             database: DatabaseConfig {
-                host: "localhost".to_string(),
-                port: 5432,
-                username: "postgres".to_string(),
-                password: "password".to_string(),
-                database: "collaborative_docs".to_string(),
+                url: None,
+                host: Some("localhost".to_string()),
+                port: Some(5432),
+                username: Some("postgres".to_string()),
+                password: Some("password".to_string()),
+                database: Some("collaborative_docs".to_string()),
                 max_connections: 10,
                 min_connections: 2,
             },
@@ -95,7 +108,15 @@ impl AppConfig {
 
         tracing::info!("Configuration loaded successfully");
         tracing::debug!("Server: {}:{}", app_config.server.host, app_config.server.port);
-        tracing::debug!("Database: {}:{}/{}", app_config.database.host, app_config.database.port, app_config.database.database);
+        if let Some(url) = &app_config.database.url {
+            tracing::debug!("Database URL: {}", url);
+        } else {
+            tracing::debug!("Database: {}:{}/{}", 
+                app_config.database.host.as_deref().unwrap_or("unknown"),
+                app_config.database.port.unwrap_or(0),
+                app_config.database.database.as_deref().unwrap_or("unknown")
+            );
+        }
 
         Ok(app_config)
     }
@@ -129,11 +150,12 @@ impl AppConfig {
         };
 
         Ok(DatabaseConfig {
-            host: host.to_string(),
-            port,
-            username: username.to_string(),
-            password: password.to_string(),
-            database: database.to_string(),
+            url: None,
+            host: Some(host.to_string()),
+            port: Some(port),
+            username: Some(username.to_string()),
+            password: Some(password.to_string()),
+            database: Some(database.to_string()),
             max_connections: 10,
             min_connections: 2,
         })
@@ -146,16 +168,22 @@ impl AppConfig {
         }
 
         // Validate database config
-        if self.database.port == 0 {
-            return Err(config::ConfigError::NotFound("Database port cannot be 0".to_string()));
+        if let Some(port) = self.database.port {
+            if port == 0 {
+                return Err(config::ConfigError::NotFound("Database port cannot be 0".to_string()));
+            }
         }
 
-        if self.database.username.is_empty() {
-            return Err(config::ConfigError::NotFound("Database username cannot be empty".to_string()));
+        if let Some(username) = &self.database.username {
+            if username.is_empty() {
+                return Err(config::ConfigError::NotFound("Database username cannot be empty".to_string()));
+            }
         }
 
-        if self.database.database.is_empty() {
-            return Err(config::ConfigError::NotFound("Database name cannot be empty".to_string()));
+        if let Some(database) = &self.database.database {
+            if database.is_empty() {
+                return Err(config::ConfigError::NotFound("Database name cannot be empty".to_string()));
+            }
         }
 
         // Validate CORS config
@@ -167,14 +195,18 @@ impl AppConfig {
     }
 
     pub fn database_url(&self) -> String {
-        format!(
-            "postgresql://{}:{}@{}:{}/{}",
-            self.database.username,
-            self.database.password,
-            self.database.host,
-            self.database.port,
-            self.database.database
-        )
+        if let Some(url) = &self.database.url {
+            url.clone()
+        } else {
+            format!(
+                "postgresql://{}:{}@{}:{}/{}",
+                self.database.username.as_deref().unwrap_or("postgres"),
+                self.database.password.as_deref().unwrap_or("password"),
+                self.database.host.as_deref().unwrap_or("localhost"),
+                self.database.port.unwrap_or(5432),
+                self.database.database.as_deref().unwrap_or("collaborative_docs")
+            )
+        }
     }
 
     pub fn is_production(&self) -> bool {

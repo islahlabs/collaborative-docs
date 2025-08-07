@@ -1,5 +1,5 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, State, Extension},
     response::Json,
     http::HeaderMap,
 };
@@ -7,8 +7,9 @@ use validator::Validate;
 
 use crate::{
     app::AppState,
+    auth::{AuthenticatedUser, require_role},
     error::{AppError, AppResult},
-    models::{CreateDocumentResponse, Document, DocumentHistory, UpdateDocumentRequest},
+    models::{CreateDocumentResponse, Document, DocumentHistory, UpdateDocumentRequest, SignupRequest, LoginRequest, AuthResponse, User, UpdateUserRoleRequest},
     crdt::{DocumentUpdate, DocumentState},
     utils::{extract_client_ip_from_headers},
 };
@@ -107,4 +108,85 @@ pub async fn apply_crdt_update(
         "status": "success",
         "message": "Update applied successfully"
     })))
+}
+
+// Authentication Handlers
+pub async fn signup(
+    State(state): State<AppState>,
+    Json(payload): Json<SignupRequest>,
+) -> AppResult<Json<AuthResponse>> {
+    // Validate input
+    payload.validate().map_err(|e| {
+        AppError::ValidationError(format!("Validation failed: {}", e))
+    })?;
+
+    // Hash password
+    let password_hash = crate::auth::hash_password(&payload.password).await?;
+
+    // Create user
+    let user = state.database.create_user(&payload, &password_hash).await?;
+
+    // Generate JWT token
+    let token = crate::auth::create_jwt_token(&user)?;
+
+    Ok(Json(AuthResponse { token, user }))
+}
+
+pub async fn login(
+    State(state): State<AppState>,
+    Json(payload): Json<LoginRequest>,
+) -> AppResult<Json<AuthResponse>> {
+    // Validate input
+    payload.validate().map_err(|e| {
+        AppError::ValidationError(format!("Validation failed: {}", e))
+    })?;
+
+    // Get user and password hash
+    let user = state.database.authenticate_user(&payload).await?;
+    let password_hash = state.database.get_user_password_hash(&payload.email).await?;
+
+    // Verify password
+    let is_valid = crate::auth::verify_password(&payload.password, &password_hash).await?;
+    if !is_valid {
+        return Err(AppError::AuthenticationError("Invalid password".to_string()));
+    }
+
+    // Generate JWT token
+    let token = crate::auth::create_jwt_token(&user)?;
+
+    Ok(Json(AuthResponse { token, user }))
+}
+
+// Protected document creation handler
+pub async fn create_document_protected(
+    Extension(user): Extension<AuthenticatedUser>,
+    State(state): State<AppState>,
+) -> AppResult<Json<CreateDocumentResponse>> {
+    // Check if user has permission to create documents
+    let check_permission = require_role("document_creator");
+    check_permission(&user)?;
+
+    let id = state.database.create_document().await?;
+    Ok(Json(CreateDocumentResponse { id }))
+}
+
+// Admin handler to update user roles
+pub async fn update_user_role(
+    Extension(admin_user): Extension<AuthenticatedUser>,
+    Path(user_id): Path<String>,
+    State(state): State<AppState>,
+    Json(payload): Json<UpdateUserRoleRequest>,
+) -> AppResult<Json<User>> {
+    // Check if user is admin
+    let check_permission = require_role("admin");
+    check_permission(&admin_user)?;
+
+    // Validate input
+    payload.validate().map_err(|e| {
+        AppError::ValidationError(format!("Validation failed: {}", e))
+    })?;
+
+    // Update user role
+    let user = state.database.update_user_role(&user_id, &payload.role_name).await?;
+    Ok(Json(user))
 } 

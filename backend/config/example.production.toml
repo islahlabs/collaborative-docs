@@ -6,13 +6,7 @@ host = "0.0.0.0"
 port = 3000
 
 [database]
-host = "localhost"
-port = 5432
-username = "postgres"
-password = "CHANGE_ME_IN_PRODUCTION"
-database = "collaborative_docs"
-max_connections = 20
-min_connections = 5
+url = "postgresql://postgres:password@localhost:5432/collaborative_docs"
 
 [cors]
 allowed_origins = [

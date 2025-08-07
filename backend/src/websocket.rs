@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{broadcast, RwLock};
-use tracing::{info, warn, error};
+use tracing::{info, error};
 use uuid::Uuid;
 use futures_util::{SinkExt, StreamExt};
 

@@ -1,4 +1,5 @@
 mod app;
+mod auth;
 mod config;
 mod crdt;
 mod database;
@@ -52,7 +53,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     info!("🚀 Server starting on http://{}", addr);
     info!("📝 API endpoints:");
-    info!("  POST   /api/doc");
+    info!("  POST   /api/auth/signup");
+    info!("  POST   /api/auth/login");
+    info!("  POST   /api/doc (requires authentication)");
+    info!("  PUT    /api/admin/users/{{user_id}}/role (admin only)");
     info!("  GET    /api/doc/{{id}}");
     info!("  PUT    /api/doc/{{id}}");
     info!("  GET    /api/doc/{{id}}/history");

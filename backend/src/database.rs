@@ -1,4 +1,4 @@
-use crate::{error::AppError, models::{Document, DocumentHistory}};
+use crate::{error::AppError, models::{Document, DocumentHistory, User, SignupRequest, LoginRequest}};
 use sqlx::postgres::PgPool;
 use uuid::Uuid;
 use std::sync::Arc;
@@ -202,5 +202,164 @@ impl Database {
             .collect();
 
         Ok(documents)
+    }
+
+    // User Management Methods
+    pub async fn create_user(&self, request: &SignupRequest, password_hash: &str) -> Result<User, AppError> {
+        // Check if user already exists
+        let existing_user = sqlx::query!(
+            "SELECT id FROM users WHERE email = $1",
+            request.email
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if existing_user.is_some() {
+            return Err(AppError::UserAlreadyExists(request.email.clone()));
+        }
+
+        // Get the default user role (role_id = 2 for 'user')
+        let role = sqlx::query!(
+            "SELECT id, name FROM roles WHERE name = 'user'"
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let user_id = Uuid::new_v4();
+        let now = chrono::Utc::now();
+
+        sqlx::query!(
+            "INSERT INTO users (id, email, password_hash, role_id, created_at, updated_at) VALUES ($1, $2, $3, $4, $5, $6)",
+            user_id,
+            request.email,
+            password_hash,
+            role.id,
+            now,
+            now
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(User {
+            id: user_id,
+            email: request.email.clone(),
+            role_id: role.id,
+            role_name: role.name,
+            is_active: true,
+            created_at: now,
+            updated_at: now,
+        })
+    }
+
+    pub async fn authenticate_user(&self, request: &LoginRequest) -> Result<User, AppError> {
+        let row = sqlx::query!(
+            "SELECT u.id, u.email, u.password_hash, u.role_id, u.is_active, u.created_at, u.updated_at, r.name as role_name 
+             FROM users u 
+             JOIN roles r ON u.role_id = r.id 
+             WHERE u.email = $1",
+            request.email
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let user_data = row.ok_or_else(|| AppError::UserNotFound(request.email.clone()))?;
+
+        if !user_data.is_active {
+            return Err(AppError::AuthenticationError("Account is deactivated".to_string()));
+        }
+
+        // Verify password (this will be done in the handler)
+        Ok(User {
+            id: user_data.id,
+            email: user_data.email,
+            role_id: user_data.role_id,
+            role_name: user_data.role_name,
+            is_active: user_data.is_active,
+            created_at: user_data.created_at,
+            updated_at: user_data.updated_at,
+        })
+    }
+
+    pub async fn get_user_by_id(&self, user_id: &Uuid) -> Result<User, AppError> {
+        let row = sqlx::query!(
+            "SELECT u.id, u.email, u.role_id, u.is_active, u.created_at, u.updated_at, r.name as role_name 
+             FROM users u 
+             JOIN roles r ON u.role_id = r.id 
+             WHERE u.id = $1",
+            user_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let user_data = row.ok_or_else(|| AppError::UserNotFound(user_id.to_string()))?;
+
+        Ok(User {
+            id: user_data.id,
+            email: user_data.email,
+            role_id: user_data.role_id,
+            role_name: user_data.role_name,
+            is_active: user_data.is_active,
+            created_at: user_data.created_at,
+            updated_at: user_data.updated_at,
+        })
+    }
+
+    pub async fn get_user_password_hash(&self, email: &str) -> Result<String, AppError> {
+        let row = sqlx::query!(
+            "SELECT password_hash FROM users WHERE email = $1",
+            email
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let password_hash = row.ok_or_else(|| AppError::UserNotFound(email.to_string()))?;
+        Ok(password_hash.password_hash)
+    }
+
+    pub async fn update_user_role(&self, user_id: &str, role_name: &str) -> Result<User, AppError> {
+        let uuid = Uuid::parse_str(user_id).map_err(|_| AppError::UserNotFound(user_id.to_string()))?;
+        
+        // First check if the role exists
+        let role = sqlx::query!(
+            "SELECT id, name FROM roles WHERE name = $1",
+            role_name
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let role_data = role.ok_or_else(|| AppError::ValidationError(format!("Role '{}' does not exist", role_name)))?;
+
+        // Update the user's role
+        sqlx::query!(
+            "UPDATE users SET role_id = $1, updated_at = $2 WHERE id = $3",
+            role_data.id,
+            chrono::Utc::now(),
+            uuid
+        )
+        .execute(&self.pool)
+        .await?;
+
+        // Get the updated user
+        let row = sqlx::query!(
+            "SELECT u.id, u.email, u.role_id, u.is_active, u.created_at, u.updated_at, r.name as role_name 
+             FROM users u 
+             JOIN roles r ON u.role_id = r.id 
+             WHERE u.id = $1",
+            uuid
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let user_data = row.ok_or_else(|| AppError::UserNotFound(user_id.to_string()))?;
+
+        Ok(User {
+            id: user_data.id,
+            email: user_data.email,
+            role_id: user_data.role_id,
+            role_name: user_data.role_name,
+            is_active: user_data.is_active,
+            created_at: user_data.created_at,
+            updated_at: user_data.updated_at,
+        })
     }
 } 
