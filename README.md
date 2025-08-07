@@ -94,6 +94,25 @@ collaborative-docs/
    pnpm test
    ```
 
+## 🚀 Deployment
+
+For detailed deployment instructions, including port configuration, database setup, and reverse proxy configuration, see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+### Port Configuration
+
+- **Backend**: Configurable via `APP__SERVER__PORT` environment variable or TOML config files
+- **Frontend**: Configurable via `VITE_PORT` environment variable
+- **Database**: Configurable via `APP__DATABASE__PORT` or `DATABASE_URL`
+
+### Database Setup
+
+The application supports multiple database setup options:
+- Docker PostgreSQL (automatic with docker-compose)
+- Manual PostgreSQL installation
+- Cloud database services (AWS RDS, Google Cloud SQL, etc.)
+
+See [DEPLOYMENT.md](DEPLOYMENT.md) for complete database setup instructions.
+
 ## 📁 Project Structure
 
 ```
@@ -132,19 +151,25 @@ collaborative-docs/
 
 ### Environment Variables
 
-Create a `.env` file in the root directory:
+Copy the example environment file and modify as needed:
 
 ```bash
-# Database
-DATABASE_URL=postgresql://username:password@localhost:5432/collaborative_docs
+# Copy example environment file
+cp env.example .env
 
-# Server
-RUST_LOG=info
-RUN_MODE=development
-
-# Frontend
-VITE_API_URL=http://localhost:3000
+# Edit the file with your settings
+nano .env
 ```
+
+The environment file includes configuration for:
+- Database connection settings
+- Server port and host configuration
+- Frontend dev server settings
+- CORS configuration
+- Docker settings
+- Production deployment settings
+
+See `env.example` for all available options and their descriptions.
 
 ### Backend Configuration
 

@@ -11,6 +11,10 @@ export default defineConfig({
       "@": "/src",
     },
   },
+  server: {
+    port: parseInt(process.env.VITE_PORT || '5173'),
+    host: process.env.VITE_HOST || 'localhost',
+  },
   test: {
     globals: true,
     environment: 'jsdom',
