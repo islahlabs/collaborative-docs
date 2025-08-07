@@ -6,6 +6,7 @@ mod database;
 mod error;
 mod handlers;
 mod models;
+mod openapi;
 mod tests;
 mod utils;
 mod websocket;
@@ -62,6 +63,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("  GET    /api/doc/{{id}}/history");
     info!("  GET    /api/doc/{{id}}/stats");
     info!("  GET    /api/search?q=query");
+    info!("  GET    /api/doc/{{id}}/crdt/state");
+    info!("  POST   /api/doc/{{id}}/crdt/update");
+    info!("  GET    /ws/doc/{{document_id}} (WebSocket)");
+    info!("  GET    /ws/info/{{document_id}}");
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
     axum::serve(listener, app).await?;

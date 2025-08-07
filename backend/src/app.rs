@@ -6,6 +6,7 @@ use axum::{
 };
 use tower_http::cors::CorsLayer;
 use std::sync::Arc;
+use utoipa::OpenApi;
 
 use crate::{
     config::AppConfig,
@@ -17,6 +18,7 @@ use crate::{
         signup, login, create_document_protected, update_user_role,
     },
     websocket::{websocket_handler, websocket_info_handler, WebSocketManager},
+    openapi::{ApiDoc, SwaggerUi},
 };
 
 #[derive(Clone)]
@@ -70,7 +72,9 @@ pub fn create_app(database: Database, config: &AppConfig) -> Router {
         .route("/api/doc/{id}/crdt/update", post(apply_crdt_update))
         // WebSocket routes
         .route("/ws/doc/{document_id}", get(websocket_handler))
-        .route("/ws/info/{document_id}", get(websocket_info_handler));
+        .route("/ws/info/{document_id}", get(websocket_info_handler))
+        // Swagger UI
+        .merge(SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", ApiDoc::openapi()));
 
     let protected_routes = Router::new()
         // Protected document routes (require authentication)

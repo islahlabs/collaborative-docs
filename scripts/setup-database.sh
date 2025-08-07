@@ -90,7 +90,9 @@ EOF
     
     # Now connect to the specific database and grant schema privileges
     print_status "Setting up schema permissions..."
-    PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME << EOF
+    
+    # Grant schema permissions as postgres superuser
+    sudo -u postgres psql -d $DB_NAME << EOF
 -- Grant privileges on public schema
 GRANT ALL PRIVILEGES ON SCHEMA public TO $DB_USER;
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO $DB_USER;

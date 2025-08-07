@@ -5,6 +5,7 @@ use axum::{
 };
 use validator::Validate;
 
+
 use crate::{
     app::AppState,
     auth::{AuthenticatedUser, require_role},
@@ -15,6 +16,15 @@ use crate::{
 };
 
 /// Create a new document
+#[utoipa::path(
+    post,
+    path = "/api/doc",
+    responses(
+        (status = 200, description = "Document created successfully", body = CreateDocumentResponse),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "documents"
+)]
 pub async fn create_document(
     State(state): State<AppState>,
 ) -> AppResult<Json<CreateDocumentResponse>> {
@@ -23,6 +33,18 @@ pub async fn create_document(
 }
 
 /// Get a document by ID
+#[utoipa::path(
+    get,
+    path = "/api/doc/{id}",
+    params(
+        ("id" = String, Path, description = "Document ID")
+    ),
+    responses(
+        (status = 200, description = "Document retrieved successfully", body = Document),
+        (status = 404, description = "Document not found")
+    ),
+    tag = "documents"
+)]
 pub async fn get_document(
     Path(id): Path<String>,
     State(state): State<AppState>,
@@ -110,7 +132,18 @@ pub async fn apply_crdt_update(
     })))
 }
 
-// Authentication Handlers
+/// Register a new user account
+#[utoipa::path(
+    post,
+    path = "/api/auth/signup",
+    request_body = SignupRequest,
+    responses(
+        (status = 200, description = "User registered successfully", body = AuthResponse),
+        (status = 400, description = "Validation error"),
+        (status = 409, description = "User already exists")
+    ),
+    tag = "auth"
+)]
 pub async fn signup(
     State(state): State<AppState>,
     Json(payload): Json<SignupRequest>,
@@ -132,6 +165,18 @@ pub async fn signup(
     Ok(Json(AuthResponse { token, user }))
 }
 
+/// Authenticate user with existing credentials
+#[utoipa::path(
+    post,
+    path = "/api/auth/login",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "User authenticated successfully", body = AuthResponse),
+        (status = 400, description = "Validation error"),
+        (status = 401, description = "Authentication failed")
+    ),
+    tag = "auth"
+)]
 pub async fn login(
     State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,

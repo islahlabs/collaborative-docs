@@ -239,15 +239,23 @@ pnpm test:all
 
 ## 📊 API Documentation
 
-### Authentication Endpoints
+For comprehensive API documentation, see [API_DOCUMENTATION.md](API_DOCUMENTATION.md).
 
+### Interactive Documentation
+
+Access the interactive Swagger UI at:
+- **Development**: `http://localhost:3000/swagger-ui`
+- **Production**: `https://api.example.com/swagger-ui`
+
+### Quick Reference
+
+#### Authentication Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/auth/signup` | Register a new user |
 | `POST` | `/api/auth/login` | Authenticate user |
 
-### Document Endpoints
-
+#### Document Endpoints
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/api/doc` | Create a new document |
@@ -257,8 +265,18 @@ pnpm test:all
 | `GET` | `/api/doc/{id}/stats` | Get document statistics |
 | `GET` | `/api/search?q=query` | Search documents |
 
-### WebSocket Endpoints
+#### CRDT Endpoints (Real-time Collaboration)
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/api/doc/{id}/crdt/state` | Get CRDT state |
+| `POST` | `/api/doc/{id}/crdt/update` | Apply CRDT update |
 
+#### Admin Endpoints
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `PUT` | `/api/admin/users/{user_id}/role` | Update user role |
+
+#### WebSocket Endpoints
 | Endpoint | Description |
 |----------|-------------|
 | `ws://localhost:3000/ws/doc/{id}` | Real-time document collaboration |

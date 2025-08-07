@@ -1,0 +1,32 @@
+[Unit]
+Description=Collaborative Docs Backend API
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=collaborative-docs
+Group=collaborative-docs
+WorkingDirectory=/path/to/collaborative-docs/backend
+ExecStart=/path/to/collaborative-docs/backend/target/release/collaborative-docs-rs
+Restart=always
+RestartSec=10
+Environment=RUST_LOG=info
+Environment=RUN_MODE=production
+Environment=DATABASE_URL=postgresql://user:pass@localhost:5432/collaborative_docs
+Environment=APP__SERVER__PORT=3001
+Environment=APP__SERVER__HOST=0.0.0.0
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/path/to/collaborative-docs/backend/logs
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target 
