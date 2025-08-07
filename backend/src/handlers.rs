@@ -1,6 +1,7 @@
 use axum::{
     extract::{Path, State},
     response::Json,
+    http::HeaderMap,
 };
 use validator::Validate;
 
@@ -9,6 +10,7 @@ use crate::{
     error::{AppError, AppResult},
     models::{CreateDocumentResponse, Document, DocumentHistory, UpdateDocumentRequest},
     crdt::{DocumentUpdate, DocumentState},
+    utils::{extract_client_ip_from_headers},
 };
 
 /// Create a new document
@@ -32,6 +34,7 @@ pub async fn get_document(
 pub async fn update_document(
     Path(id): Path<String>,
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<UpdateDocumentRequest>,
 ) -> AppResult<Json<Document>> {
     // Validate input
@@ -39,10 +42,10 @@ pub async fn update_document(
         AppError::ValidationError(format!("Validation failed: {}", e))
     })?;
 
-    // TODO: Extract real IP address from request
-    let ip_address = "127.0.0.1";
+    // Extract IP address from headers (proxy headers or fallback to localhost)
+    let ip_address = extract_client_ip_from_headers(&headers);
     
-    let document = state.database.update_document(&id, &payload.content, ip_address).await?;
+    let document = state.database.update_document(&id, &payload.content, &ip_address).await?;
     Ok(Json(document))
 }
 
