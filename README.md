@@ -2,7 +2,15 @@
 
 A real-time collaborative document editing platform built with modern web technologies (Rust backend, React + TypeScript frontend). Features live collaboration, version history, and a beautiful user interface.
 
-![Collaborative Docs Screenshot](https://via.placeholder.com/800x400/2563eb/ffffff?text=Collaborative+Docs)
+<!-- ![Collaborative Docs Screenshot](https://via.placeholder.com/800x400/2563eb/ffffff?text=Collaborative+Docs) -->
+
+## 🎯 Live Demo
+
+**Try it out now!** Experience real-time collaborative editing with our live demo:
+
+**[🌐 Live Demo - Collaborative Docs](https://docs.islahlabs.com/doc/93d03669-4894-4ab6-a38e-21bab20e9d04)**
+
+Open the demo in multiple browser tabs to see real-time collaboration in action!
 
 ## 🚀 Features
 
