@@ -61,7 +61,13 @@ export class WebSocketService {
 
       try {
         this.isConnecting = true;
-        const wsUrl = `ws://localhost:3000/ws/doc/${documentId}`;
+        
+        // Determine WebSocket URL based on environment
+        const baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+        const wsProtocol = baseUrl.startsWith('https') ? 'wss' : 'ws';
+        const wsHost = baseUrl.replace(/^https?:\/\//, '');
+        const wsUrl = `${wsProtocol}://${wsHost}/ws/doc/${documentId}`;
+        
         console.log('Creating WebSocket connection to:', wsUrl);
         this.ws = new WebSocket(wsUrl);
         this.documentId = documentId;

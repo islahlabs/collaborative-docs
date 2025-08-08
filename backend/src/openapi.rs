@@ -35,12 +35,12 @@ use crate::models::*;
         version = "1.0.0",
         contact(
             name = "API Support",
-            email = "support@example.com"
+            email = "support@islahlabs.com"
         )
     ),
     servers(
         (url = "http://localhost:3000", description = "Development server"),
-        (url = "https://api.example.com", description = "Production server")
+        (url = "https://docs.islahlabs.com", description = "Production server")
     )
 )]
 pub struct ApiDoc;
