@@ -202,13 +202,15 @@ sudo -u "$SUDO_USER" env DATABASE_URL="$DATABASE_URL" "$CARGO_PATH" build --rele
 # Run database migrations
 print_status "Running database migrations..."
 # Check if sqlx-cli is installed
-if ! command -v sqlx &> /dev/null; then
+SQLX_PATH="/home/$SUDO_USER/.cargo/bin/sqlx"
+if [ ! -f "$SQLX_PATH" ]; then
     print_status "Installing sqlx-cli..."
     sudo -u "$SUDO_USER" "$CARGO_PATH" install sqlx-cli --no-default-features --features postgres
 fi
 
-# Run migrations with the correct DATABASE_URL
-sudo -u "$SUDO_USER" env DATABASE_URL="$DATABASE_URL" sqlx migrate run
+# Run migrations with the correct DATABASE_URL using full path to sqlx
+print_status "Running migrations with sqlx..."
+sudo -u "$SUDO_USER" env DATABASE_URL="$DATABASE_URL" "$SQLX_PATH" migrate run
 
 # Change ownership back to service user
 print_status "Setting service permissions..."
