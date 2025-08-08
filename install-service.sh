@@ -15,7 +15,7 @@ fi
 SERVICE_NAME="collaborative-docs"
 SERVICE_USER="collaborative-docs"
 SERVICE_GROUP="collaborative-docs"
-INSTALL_DIR="/path/to/collaborative-docs"
+INSTALL_DIR="/opt/collaborative-docs"
 BACKEND_DIR="$INSTALL_DIR/backend"
 SERVICE_FILE="collaborative-docs.service"
 
@@ -53,7 +53,10 @@ mkdir -p "$BACKEND_DIR/logs"
 
 # Copy files to installation directory
 print_status "Copying application files..."
-cp -r . "$BACKEND_DIR/"
+# Copy backend directory contents to avoid nested structure
+cp -r backend/* "$BACKEND_DIR/"
+# Also copy the service file from project root
+cp collaborative-docs.service "$BACKEND_DIR/"
 chown -R "$SERVICE_USER:$SERVICE_GROUP" "$INSTALL_DIR"
 
 # Create logs directory with proper permissions
@@ -62,13 +65,48 @@ chown "$SERVICE_USER:$SERVICE_GROUP" "$BACKEND_DIR/logs"
 chmod 755 "$BACKEND_DIR/logs"
 
 # Build the application
-print_status "Building the application..."
+print_status "Building application as current user..."
 cd "$BACKEND_DIR"
-sudo -u "$SERVICE_USER" cargo build --release
+
+# Temporarily change ownership to sudo user for building
+print_status "Setting up build permissions..."
+chown -R "$SUDO_USER:$SUDO_USER" "$BACKEND_DIR"
+
+# Build as regular user using sudo -u with full cargo path
+print_status "Building application as user $SUDO_USER..."
+CARGO_PATH="/home/$SUDO_USER/.cargo/bin/cargo"
+if [ ! -f "$CARGO_PATH" ]; then
+    print_error "❌ Cargo not found at $CARGO_PATH"
+    print_error "Please ensure Rust is installed for user $SUDO_USER"
+    exit 1
+fi
+print_status "Using cargo at: $CARGO_PATH"
+print_status "Building from directory: $(pwd)"
+
+# Set DATABASE_URL for sqlx compilation
+export DATABASE_URL="postgresql://user:pass@localhost:5432/collaborative_docs"
+print_status "Using DATABASE_URL: $DATABASE_URL"
+
+sudo -u "$SUDO_USER" env DATABASE_URL="$DATABASE_URL" "$CARGO_PATH" build --release
+
+# Change ownership back to service user
+print_status "Setting service permissions..."
+chown -R "$SERVICE_USER:$SERVICE_GROUP" "$BACKEND_DIR"
+
+# Ensure proper ownership of built files
+chown -R "$SERVICE_USER:$SERVICE_GROUP" "$BACKEND_DIR"
 
 # Install systemd service
 print_status "Installing systemd service..."
-cp "$SERVICE_FILE" /etc/systemd/system/
+# The service file was copied to the backend directory during installation
+SERVICE_FILE_PATH="$BACKEND_DIR/collaborative-docs.service"
+if [ -f "$SERVICE_FILE_PATH" ]; then
+    cp "$SERVICE_FILE_PATH" /etc/systemd/system/
+else
+    print_error "❌ Service file not found at $SERVICE_FILE_PATH"
+    print_error "Please ensure the service file exists in the project root"
+    exit 1
+fi
 systemctl daemon-reload
 
 # Enable and start the service
@@ -107,4 +145,4 @@ echo "🌐 API Access:"
 echo "   Swagger UI: http://localhost:3001/swagger-ui"
 echo "   API Base:   http://localhost:3001"
 echo ""
-print_status "Installation completed successfully!" 
+print_status "Installation completed successfully!"

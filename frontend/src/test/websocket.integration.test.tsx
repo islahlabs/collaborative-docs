@@ -31,7 +31,7 @@ const mockApi = vi.mocked(await import('@/services/api')).api as any;
 const mockWebSocketService = vi.mocked(websocketService) as any;
 
 // Helper to render Editor with router
-const renderEditor = (documentId: string) => {
+const renderEditor = () => {
   return render(
     <BrowserRouter>
       <Editor />
@@ -80,7 +80,7 @@ describe('Editor WebSocket Integration', () => {
         };
       });
 
-      renderEditor('test-doc-123');
+      renderEditor();
 
       await waitFor(() => {
         expect(mockWebSocketService.connect).toHaveBeenCalledWith('test-doc-123');
@@ -88,7 +88,7 @@ describe('Editor WebSocket Integration', () => {
     });
 
     it('should disconnect WebSocket when component unmounts', async () => {
-      const { unmount } = renderEditor('test-doc-123');
+      const { unmount } = renderEditor();
       
       // Wait for component to mount and connect
       await waitFor(() => {
@@ -105,7 +105,7 @@ describe('Editor WebSocket Integration', () => {
     it('should show connection status in UI', async () => {
       mockWebSocketService.isConnected.mockReturnValue(true);
       
-      renderEditor('test-doc-123');
+      renderEditor();
 
       await waitFor(() => {
         expect(screen.getByText('Live')).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe('Editor WebSocket Integration', () => {
     it('should show offline status when WebSocket is disconnected', async () => {
       mockWebSocketService.isConnected.mockReturnValue(false);
       
-      renderEditor('test-doc-123');
+      renderEditor();
 
       await waitFor(() => {
         expect(screen.getByText('Offline')).toBeInTheDocument();
@@ -127,7 +127,7 @@ describe('Editor WebSocket Integration', () => {
     it('should send document updates via WebSocket', async () => {
       const user = userEvent.setup();
       
-      renderEditor('test-doc-123');
+      renderEditor();
 
       const textarea = await screen.findByRole('textbox');
       await user.type(textarea, 'New content');
@@ -152,7 +152,7 @@ describe('Editor WebSocket Integration', () => {
         }
       });
 
-      renderEditor('test-doc-123');
+      renderEditor();
 
       await waitFor(() => {
         expect(mockWebSocketService.on).toHaveBeenCalledWith('documentUpdated', expect.any(Function));
@@ -169,7 +169,7 @@ describe('Editor WebSocket Integration', () => {
     });
 
     it('should handle user join/leave events', async () => {
-      renderEditor('test-doc-123');
+      renderEditor();
 
       await waitFor(() => {
         expect(mockWebSocketService.on).toHaveBeenCalledWith('userJoined', expect.any(Function));
@@ -182,7 +182,7 @@ describe('Editor WebSocket Integration', () => {
     it('should handle WebSocket connection errors gracefully', async () => {
       mockWebSocketService.connect.mockRejectedValue(new Error('Connection failed'));
       
-      renderEditor('test-doc-123');
+      renderEditor();
 
       await waitFor(() => {
         expect(screen.getByText('Offline')).toBeInTheDocument();
@@ -198,7 +198,7 @@ describe('Editor WebSocket Integration', () => {
         }
       });
 
-      renderEditor('test-doc-123');
+      renderEditor();
 
       await waitFor(() => {
         expect(mockWebSocketService.on).toHaveBeenCalledWith('error', expect.any(Function));
@@ -213,7 +213,7 @@ describe('Editor WebSocket Integration', () => {
 
   describe('UI Integration', () => {
     it('should display active user count', async () => {
-      renderEditor('test-doc-123');
+      renderEditor();
 
       // Mock active users state
       await waitFor(() => {
@@ -225,7 +225,7 @@ describe('Editor WebSocket Integration', () => {
     it('should show saving status during updates', async () => {
       const user = userEvent.setup();
       
-      renderEditor('test-doc-123');
+      renderEditor();
 
       const textarea = await screen.findByRole('textbox');
       await user.type(textarea, 'New content');
