@@ -7,8 +7,8 @@ Wants=postgresql.service
 Type=simple
 User=collaborative-docs
 Group=collaborative-docs
-WorkingDirectory=/path/to/collaborative-docs/backend
-ExecStart=/path/to/collaborative-docs/backend/target/release/collaborative-docs-rs
+WorkingDirectory=/opt/collaborative-docs
+ExecStart=/opt/collaborative-docs/target/release/collaborative-docs-rs
 Restart=always
 RestartSec=10
 Environment=RUST_LOG=info
@@ -22,7 +22,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/path/to/collaborative-docs/backend/logs
+ReadWritePaths=/opt/collaborative-docs/logs
 
 # Resource limits
 LimitNOFILE=65536
