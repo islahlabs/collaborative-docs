@@ -6,6 +6,7 @@ import { FileText, ArrowRight, LogOut, User } from 'lucide-react';
 import { api } from '@/services/api';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { AuthPage } from '@/components/AuthPage';
+import { GitHubIcon } from '@/components/ui/github-icon';
 
 function AppContent() {
   const { user, token, logout, isLoading, redirectToAuth } = useAuth();
@@ -55,6 +56,18 @@ function AppContent() {
                 <h1 className="text-xl font-semibold">Collaborative Docs</h1>
               </div>
               <div className="flex items-center space-x-4">
+                {/* GitHub Link */}
+                <a
+                  href="https://github.com/islahlabs/collaborative-docs"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-2 text-muted-foreground hover:text-foreground transition-colors"
+                  title="View source on GitHub"
+                >
+                  <GitHubIcon className="h-5 w-5" />
+                  <span className="hidden sm:inline">Source Code</span>
+                </a>
+
                 {user ? (
                   <>
                     <div className="flex items-center space-x-2">
@@ -160,6 +173,7 @@ function AppContent() {
                   )}
                 </CardContent>
               </Card>
+              
             </div>
           } />
         </Routes>
