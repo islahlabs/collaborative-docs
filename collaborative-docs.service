@@ -8,7 +8,7 @@ Type=simple
 User=collaborative-docs
 Group=collaborative-docs
 WorkingDirectory=/opt/collaborative-docs
-ExecStart=/opt/collaborative-docs/target/release/collaborative-docs-rs
+ExecStart=/opt/collaborative-docs/backend/target/release/collaborative-docs-rs
 Restart=always
 RestartSec=10
 Environment=RUST_LOG=info
