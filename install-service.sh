@@ -152,8 +152,8 @@ Wants=postgresql.service
 Type=simple
 User=collaborative-docs
 Group=collaborative-docs
-WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/target/release/collaborative-docs-rs
+WorkingDirectory=$BACKEND_DIR
+ExecStart=$BACKEND_DIR/target/release/collaborative-docs-rs
 Restart=always
 RestartSec=10
 Environment=RUST_LOG=info
@@ -167,7 +167,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=$INSTALL_DIR/logs
+ReadWritePaths=$BACKEND_DIR/logs
 
 # Resource limits
 LimitNOFILE=65536
