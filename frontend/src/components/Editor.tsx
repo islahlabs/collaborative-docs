@@ -3,7 +3,8 @@ import { useParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Save, Clock, History, User, Wifi, WifiOff } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Save, Clock, History, User, Wifi, WifiOff, ChevronDown, ChevronUp, X } from 'lucide-react';
 import { api } from '@/services/api';
 import { websocketService } from '@/services/websocket';
 import type { DocumentHistory } from '@/services/api';
@@ -22,6 +23,7 @@ export default function Editor({ onSave }: EditorProps) {
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
   const [activeUsers, setActiveUsers] = useState<string[]>([]);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(false);
   const { id } = useParams<{ id: string }>();
 
   // Load document history
@@ -194,16 +196,17 @@ export default function Editor({ onSave }: EditorProps) {
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 h-screen flex flex-col">
-      <Card className="mb-6">
-        <CardHeader className="pb-3">
-          <div className="flex justify-between items-center">
-            <CardTitle className="text-2xl">Document: {id}</CardTitle>
-            <div className="flex items-center gap-3">
+    <div className="h-screen flex flex-col bg-gray-50">
+      {/* Mobile-first header */}
+      <div className="bg-white border-b px-4 py-3 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-semibold truncate">Document: {id}</h1>
+            <div className="flex items-center gap-2 mt-1 flex-wrap">
               {/* WebSocket Status */}
               <Badge 
                 variant={isWebSocketConnected ? "default" : "secondary"} 
-                className="flex items-center gap-1"
+                className="flex items-center gap-1 text-xs"
               >
                 {isWebSocketConnected ? (
                   <>
@@ -220,95 +223,128 @@ export default function Editor({ onSave }: EditorProps) {
               
               {/* Active Users */}
               {activeUsers.length > 0 && (
-                <Badge variant="outline" className="flex items-center gap-1">
+                <Badge variant="outline" className="flex items-center gap-1 text-xs">
                   <User className="h-3 w-3" />
                   {activeUsers.length} active
                 </Badge>
               )}
               
               {isSaving && (
-                <Badge variant="secondary" className="flex items-center gap-1">
+                <Badge variant="secondary" className="flex items-center gap-1 text-xs">
                   <Save className="h-3 w-3" />
                   Saving...
                 </Badge>
               )}
               {lastSaved && !isSaving && (
-                <Badge variant="outline" className="flex items-center gap-1 text-green-600">
+                <Badge variant="outline" className="flex items-center gap-1 text-xs text-green-600">
                   <Clock className="h-3 w-3" />
                   Last saved: {lastSaved.toLocaleTimeString()}
                 </Badge>
               )}
             </div>
           </div>
-        </CardHeader>
-      </Card>
-      
-      <div className="flex-1 flex gap-6">
-        {/* Editor Section */}
-        <Card className="flex-1">
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="flex items-center justify-center min-h-[500px]">
-                <div className="text-muted-foreground">Loading document...</div>
-              </div>
-            ) : error ? (
-              <div className="flex items-center justify-center min-h-[500px]">
-                <div className="text-destructive">{error}</div>
-              </div>
+          
+          {/* History toggle button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setIsHistoryOpen(!isHistoryOpen)}
+            className="ml-2 flex items-center gap-1"
+          >
+            <History className="h-4 w-4" />
+            <span className="hidden sm:inline">History</span>
+            {isHistoryOpen ? (
+              <ChevronUp className="h-4 w-4" />
             ) : (
-              <Textarea
-                className="min-h-[500px] border-0 resize-none text-base leading-relaxed font-mono focus-visible:ring-0 focus-visible:ring-offset-0"
-                value={content}
-                onChange={handleContentChange}
-                placeholder="Start typing your document..."
-                autoFocus
-              />
+              <ChevronDown className="h-4 w-4" />
             )}
-          </CardContent>
-        </Card>
+          </Button>
+        </div>
+      </div>
 
-        {/* History Section */}
-        <Card className="w-80">
-          <CardHeader className="pb-3">
-            <div className="flex items-center gap-2">
-              <History className="h-4 w-4" />
-              <CardTitle className="text-lg">Version History</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent className="p-4">
-            {isLoadingHistory ? (
-              <div className="text-center text-muted-foreground py-4">
-                Loading history...
-              </div>
-            ) : history.length === 0 ? (
-              <div className="text-center text-muted-foreground py-4">
-                No history yet
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                {history.map((entry, index) => {
-                  const formatted = formatHistoryEntry(entry);
-                  return (
-                    <div key={index} className="border rounded-lg p-3 bg-muted/30">
-                      <div className="flex items-center gap-2 mb-2">
-                        <User className="h-3 w-3 text-muted-foreground" />
-                        <span className="text-xs text-muted-foreground">
-                          {formatted.ipAddress}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatted.timeAgo}
-                        </span>
-                      </div>
-                      <p className="text-sm text-foreground">
-                        {formatted.contentPreview}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {/* Main content area */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+        {/* Editor Section */}
+        <div className="flex-1 flex flex-col min-h-0">
+          <Card className="flex-1 m-4 lg:m-6 flex flex-col">
+            <CardContent className="flex-1 p-0 flex flex-col">
+              {isLoading ? (
+                <div className="flex items-center justify-center flex-1">
+                  <div className="text-muted-foreground">Loading document...</div>
+                </div>
+              ) : error ? (
+                <div className="flex items-center justify-center flex-1">
+                  <div className="text-destructive">{error}</div>
+                </div>
+              ) : (
+                <Textarea
+                  className="flex-1 border-0 resize-none text-base leading-relaxed font-mono focus-visible:ring-0 focus-visible:ring-offset-0 p-4"
+                  value={content}
+                  onChange={handleContentChange}
+                  placeholder="Start typing your document..."
+                  autoFocus
+                />
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Collapsible History Section */}
+        {isHistoryOpen && (
+          <div className="lg:w-80 w-full border-t lg:border-t-0 lg:border-l bg-white">
+            <Card className="h-full flex flex-col m-4 lg:m-6">
+              <CardHeader className="pb-3 flex-shrink-0">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <History className="h-4 w-4" />
+                    <CardTitle className="text-lg">Version History</CardTitle>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsHistoryOpen(false)}
+                    className="lg:hidden"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent className="flex-1 overflow-hidden">
+                {isLoadingHistory ? (
+                  <div className="text-center text-muted-foreground py-4">
+                    Loading history...
+                  </div>
+                ) : history.length === 0 ? (
+                  <div className="text-center text-muted-foreground py-4">
+                    No history yet
+                  </div>
+                ) : (
+                  <div className="space-y-3 h-full overflow-y-auto">
+                    {history.map((entry, index) => {
+                      const formatted = formatHistoryEntry(entry);
+                      return (
+                        <div key={index} className="border rounded-lg p-3 bg-muted/30">
+                          <div className="flex items-center gap-2 mb-2">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
+                              {formatted.ipAddress}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {formatted.timeAgo}
+                            </span>
+                          </div>
+                          <p className="text-sm text-foreground">
+                            {formatted.contentPreview}
+                          </p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   );
